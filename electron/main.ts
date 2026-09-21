@@ -4,8 +4,20 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { MenuItemConstructorOptions } from "electron";
-import { app, BrowserWindow, dialog, Menu, nativeImage, net, protocol, screen, shell } from "electron";
-import { initUpdater } from "./updater";
+import {
+  app,
+  type BaseWindow,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeImage,
+  net,
+  protocol,
+  screen,
+  shell
+} from "electron";
+import { checkForUpdatesNow, initUpdater } from "./updater";
 
 const SCHEME = "app";
 const HOST = "fmg";
@@ -15,6 +27,11 @@ const ICON_PATH = path.join(__dirname, "icon.png");
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const WIKI_URL = "https://github.com/Azgaar/Fantasy-Map-Generator/wiki";
 const DISCORD_URL = "https://discord.gg/X7E84HU";
+const BUG_REPORT_URL = "https://github.com/Azgaar/Fantasy-Map-Generator/issues/new?template=bug_report.yml";
+const PERF_TIPS_URL = `${WIKI_URL}/Q&A#the-map-performance-is-poor-how-can-i-improve-it`;
+
+/** Renderer notification: a .map file was queued, ask for it via `fmg:get-pending-map-file` */
+const MAP_FILE_CHANNEL = "fmg:open-map-file";
 
 /**
  * The app is named after `productName`, but its data stays in the folder the name would have
@@ -22,12 +39,68 @@ const DISCORD_URL = "https://discord.gg/X7E84HU";
  */
 app.setPath("userData", path.join(app.getPath("appData"), "fantasy-map-generator"));
 
+// Windows groups taskbar icons and notifications by this id; without it the app shows as "Electron"
+if (process.platform === "win32") app.setAppUserModelId("com.azgaar.fantasy-map-generator");
+
 app.setAboutPanelOptions({
   applicationName: app.name,
   applicationVersion: app.getVersion(),
   iconPath: ICON_PATH,
   copyright: "MIT License. Azgaar and Team, 2017-2026"
 });
+
+// ---------------------------------------------------------------------------
+// Performance: GPU rendering and no background throttling.
+// Everything here only removes slowness, never features.
+// ---------------------------------------------------------------------------
+
+type PerformanceConfig = { hardwareAcceleration: boolean };
+
+const DEFAULT_PERFORMANCE: PerformanceConfig = { hardwareAcceleration: true };
+const perfFile = () => path.join(app.getPath("userData"), "performance.json");
+
+function readPerformanceConfig(): PerformanceConfig {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(perfFile(), "utf8")) as Partial<PerformanceConfig>;
+    return { hardwareAcceleration: parsed.hardwareAcceleration !== false };
+  } catch {
+    return DEFAULT_PERFORMANCE;
+  }
+}
+
+function writePerformanceConfig(config: PerformanceConfig): void {
+  try {
+    fs.writeFileSync(perfFile(), JSON.stringify(config));
+  } catch (error) {
+    console.error("Cannot store performance settings:", error);
+  }
+}
+
+/** Must run before `app.ready`: Chromium reads its switches only at startup */
+function applyPerformanceSwitches(): void {
+  const { hardwareAcceleration } = readPerformanceConfig();
+
+  // FMG_DISABLE_GPU=1 is the escape hatch for broken drivers, no UI needed
+  if (!hardwareAcceleration || process.env.FMG_DISABLE_GPU === "1") {
+    app.commandLine.appendSwitch("disable-gpu");
+  } else {
+    // the map is a huge SVG scene: rasterize and composite it on the GPU
+    app.commandLine.appendSwitch("enable-gpu-rasterization");
+    app.commandLine.appendSwitch("enable-zero-copy");
+    app.commandLine.appendSwitch("ignore-gpu-blocklist");
+  }
+
+  // generation runs for minutes and must not stall when the window loses focus
+  app.commandLine.appendSwitch("disable-background-timer-throttling");
+  app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+  app.commandLine.appendSwitch("disable-renderer-backgrounding");
+}
+
+applyPerformanceSwitches();
+
+// ---------------------------------------------------------------------------
+// Window state
+// ---------------------------------------------------------------------------
 
 type WindowState = { width: number; height: number; x?: number; y?: number; maximized: boolean; fullscreen: boolean };
 
@@ -74,6 +147,10 @@ function saveState(window: BrowserWindow): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Renderer serving
+// ---------------------------------------------------------------------------
+
 /**
  * The renderer is an ES module app, and Chromium refuses to load modules from file://,
  * so the build is served from a privileged scheme that gives the page a real origin
@@ -119,6 +196,11 @@ function serveRenderer(): void {
       const response = await net.fetch(pathToFileURL(filePath).toString());
       const headers = new Headers(response.headers);
       headers.set("Content-Security-Policy", CSP);
+      // the bundle is content-hashed, so every restart revalidates for free; only the entry stays fresh
+      headers.set(
+        "Cache-Control",
+        filePath.endsWith("index.html") ? "no-store" : "public, max-age=31536000, immutable"
+      );
       return new Response(response.body, { status: response.status, headers });
     } catch {
       // net.fetch rejects on a missing file, and the rejection would reach the page as an opaque network error
@@ -130,7 +212,7 @@ function serveRenderer(): void {
 /** Keep the app itself in the window, hand every external link to the default browser */
 function routeExternalLinks(window: BrowserWindow): void {
   const openExternal = (url: string) => {
-    if (/^(https?|mailto):/.test(url)) shell.openExternal(url);
+    if (/^(https?|mailto):/.test(url)) void shell.openExternal(url);
   };
 
   window.webContents.setWindowOpenHandler(({ url }) => {
@@ -170,28 +252,185 @@ function enableDevTools(window: BrowserWindow): void {
   });
 }
 
+// ---------------------------------------------------------------------------
+// .map files: double-click in Explorer, File menu, or a second launch with a path
+// ---------------------------------------------------------------------------
+
+type QueuedMapFile = { name: string; data: Buffer };
+
+/** Files wait here until the renderer asks; a queue, so rapid arrivals each get loaded in turn */
+const pendingMapFiles: QueuedMapFile[] = [];
+
+ipcMain.handle(MAP_FILE_CHANNEL, () => pendingMapFiles.shift() ?? null);
+
+function isMapFile(filePath: string): boolean {
+  return /\.map$/i.test(filePath.trim());
+}
+
+/** argv[0] is the exe itself; argv[1] may be the opened file (or "." in dev) */
+function collectMapFileFromArgv(argv: string[]): string | null {
+  for (const arg of argv.slice(1)) {
+    if (arg === "." || arg.startsWith("-")) continue;
+    if (isMapFile(arg)) return arg;
+  }
+  return null;
+}
+
+function notifyMapFileQueued(): void {
+  // the event carries no payload: the renderer pulls the file itself, so nothing is lost
+  // when the page is still loading or the subscription is not attached yet
+  const window = BrowserWindow.getAllWindows().find(candidate => !candidate.isDestroyed());
+  window?.webContents.send(MAP_FILE_CHANNEL);
+}
+
+async function intakeMapFile(filePath: string): Promise<void> {
+  if (!isMapFile(filePath)) return;
+  try {
+    const data = await fs.promises.readFile(filePath);
+    pendingMapFiles.push({ name: path.basename(filePath), data });
+    notifyMapFileQueued();
+  } catch (error) {
+    console.error("Cannot open map file:", error);
+    dialog.showErrorBox(
+      "Cannot open map file",
+      `The file could not be read:\n${filePath}\n\n${(error as Error).message}`
+    );
+  }
+}
+
+/**
+ * Menu clicks hand over a `BaseWindow`, which has no webContents; narrow it to the
+ * BrowserWindow it is at runtime, falling back to the live window when there is none
+ */
+function pickWindow(window?: BrowserWindow | BaseWindow): BrowserWindow | undefined {
+  if (window instanceof BrowserWindow) return window;
+  return BrowserWindow.getAllWindows().find(candidate => !candidate.isDestroyed());
+}
+
+async function openMapFileDialog(window?: BrowserWindow | BaseWindow): Promise<void> {
+  const target = pickWindow(window);
+  const { canceled, filePaths } = target
+    ? await dialog.showOpenDialog(target, {
+        title: "Open map file",
+        filters: [{ name: "Fantasy Map Generator maps", extensions: ["map"] }],
+        properties: ["openFile"]
+      })
+    : { canceled: true as const, filePaths: [] as string[] };
+  if (canceled || !filePaths.length) return;
+  await intakeMapFile(filePaths[0]);
+}
+
+// ---------------------------------------------------------------------------
+// Menu
+// ---------------------------------------------------------------------------
+
 /**
  * The default menu offers Reload, which throws the map away without the browser's "leave site?" prompt.
- * This one drops it and keeps what the app needs: the Edit roles carry the clipboard shortcuts on macOS
+ * This one asks first, and keeps what the app needs: the Edit roles carry the clipboard shortcuts on macOS
  */
+function reloadSafely(window?: BrowserWindow | BaseWindow): void {
+  const target = pickWindow(window);
+  if (!target || target.isDestroyed()) return;
+  dialog
+    .showMessageBox(target, {
+      type: "question",
+      buttons: ["Reload", "Cancel"],
+      defaultId: 1,
+      cancelId: 1,
+      title: "Reload",
+      message: "Reload the app?",
+      detail: "Unsaved changes will be lost. The map is autosaved to the app storage, but save it to a file to be safe"
+    })
+    .then(({ response }) => {
+      if (response === 0 && !target.isDestroyed()) target.webContents.reload();
+    });
+}
+
+function setHardwareAcceleration(enabled: boolean): void {
+  writePerformanceConfig({ hardwareAcceleration: enabled });
+  buildMenu(); // refresh the checkbox state
+
+  const target = BrowserWindow.getAllWindows().find(candidate => !candidate.isDestroyed());
+  const box = target
+    ? dialog.showMessageBox(target, {
+        type: "info",
+        buttons: ["Restart now", "Later"],
+        defaultId: 0,
+        cancelId: 1,
+        title: "Restart required",
+        message: `Hardware acceleration ${enabled ? "will be enabled" : "will be disabled"} after restart`,
+        detail: "Save the map to a file before restarting"
+      })
+    : dialog.showMessageBox({
+        type: "info",
+        buttons: ["Restart now", "Later"],
+        defaultId: 0,
+        cancelId: 1,
+        title: "Restart required",
+        message: `Hardware acceleration ${enabled ? "will be enabled" : "will be disabled"} after restart`
+      });
+  box.then(({ response }) => {
+    if (response !== 0) return;
+    skipConfirmation = true;
+    app.relaunch();
+    app.quit();
+  });
+}
+
 function buildMenu(): void {
   const isMac = process.platform === "darwin";
+  const { hardwareAcceleration } = readPerformanceConfig();
 
   const template: MenuItemConstructorOptions[] = [
-    ...(isMac
-      ? ([{ role: "appMenu" }] satisfies MenuItemConstructorOptions[])
-      : // the app menu carries Quit on macOS; elsewhere there is otherwise no way to leave the app
-        // from the UI at all, which a window manager that draws no titlebar leaves with none
-        ([{ label: "File", submenu: [{ role: "quit" }] }] satisfies MenuItemConstructorOptions[])),
+    ...(isMac ? ([{ role: "appMenu" }] satisfies MenuItemConstructorOptions[]) : []),
+    {
+      label: "File",
+      submenu: [
+        {
+          label: "Open Map File…",
+          accelerator: "CmdOrCtrl+O",
+          click: (_item, window) => void openMapFileDialog(window)
+        },
+        { type: "separator" },
+        { label: "Show User Data Folder", click: () => void shell.openPath(app.getPath("userData")) },
+        { type: "separator" },
+        ...(isMac
+          ? ([{ role: "close" }] satisfies MenuItemConstructorOptions[])
+          : ([{ role: "quit" }] satisfies MenuItemConstructorOptions[]))
+      ]
+    },
     { role: "editMenu" },
     {
       label: "View",
       submenu: [
+        { label: "Reload", accelerator: "CmdOrCtrl+R", click: (_item, window) => reloadSafely(window) },
+        {
+          label: "Force Reload",
+          accelerator: "CmdOrCtrl+Shift+R",
+          click: (_item, window) => {
+            if (window instanceof BrowserWindow) window.webContents.reloadIgnoringCache();
+          }
+        },
+        { type: "separator" },
         { role: "resetZoom" },
         { role: "zoomIn" },
         { role: "zoomOut" },
         { type: "separator" },
         { role: "togglefullscreen" },
+        {
+          label: "Performance",
+          submenu: [
+            {
+              label: "Hardware Acceleration",
+              type: "checkbox",
+              checked: hardwareAcceleration,
+              toolTip: "Render the map on the GPU. Takes effect after restart",
+              click: item => setHardwareAcceleration(item.checked)
+            },
+            { label: "Performance Tips", click: () => void shell.openExternal(PERF_TIPS_URL) }
+          ]
+        },
+        { type: "separator" },
         { role: "toggleDevTools" }
       ]
     },
@@ -199,8 +438,11 @@ function buildMenu(): void {
     {
       role: "help",
       submenu: [
-        { label: "Wiki", click: () => shell.openExternal(WIKI_URL) },
-        { label: "Discord", click: () => shell.openExternal(DISCORD_URL) },
+        { label: "Wiki & Documentation", click: () => void shell.openExternal(WIKI_URL) },
+        { label: "Discord Community", click: () => void shell.openExternal(DISCORD_URL) },
+        { label: "Report a Bug", click: () => void shell.openExternal(BUG_REPORT_URL) },
+        { type: "separator" },
+        { label: "Check for Updates…", click: () => checkForUpdatesNow() },
         ...(isMac ? [] : ([{ type: "separator" }, { role: "about" }] satisfies MenuItemConstructorOptions[]))
       ]
     }
@@ -265,6 +507,51 @@ function confirmOnClose(window: BrowserWindow): void {
   });
 }
 
+/**
+ * A huge map can freeze or crash the renderer; instead of a dead white window,
+ * offer a way back. Nothing here touches the map data itself
+ */
+function watchRendererHealth(window: BrowserWindow): void {
+  window.on("unresponsive", () => {
+    dialog
+      .showMessageBox(window, {
+        type: "warning",
+        buttons: ["Reload", "Keep Waiting"],
+        defaultId: 1,
+        cancelId: 1,
+        title: "The app stopped responding",
+        message: "The map view stopped responding",
+        detail: "A huge map or a heavy operation can freeze the view for a while. Reloading loses unsaved changes"
+      })
+      .then(({ response }) => {
+        if (response === 0 && !window.isDestroyed()) window.webContents.reload();
+      });
+  });
+
+  window.webContents.on("render-process-gone", (_event, details) => {
+    console.error("Renderer process gone:", details.reason, details.exitCode);
+    if (window.isDestroyed()) return;
+    dialog
+      .showMessageBox(window, {
+        type: "error",
+        buttons: ["Reload", "Close"],
+        defaultId: 0,
+        cancelId: 1,
+        title: "The map view crashed",
+        message: "The map view crashed and was stopped",
+        detail: `Reason: ${details.reason}. Reloading restores the app, but unsaved changes may be lost`
+      })
+      .then(({ response }) => {
+        if (window.isDestroyed()) return;
+        if (response === 0) window.webContents.reload();
+        else {
+          skipConfirmation = true; // the renderer is dead: there is nothing left to confirm with
+          window.close();
+        }
+      });
+  });
+}
+
 function createWindow(): void {
   const { maximized, fullscreen, ...bounds } = readState();
 
@@ -282,7 +569,8 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      spellcheck: false
+      spellcheck: false,
+      backgroundThrottling: false // generation and autosave run on timers that must survive losing focus
     }
   });
 
@@ -291,14 +579,28 @@ function createWindow(): void {
   window.once("ready-to-show", () => window.show());
   enableDevTools(window);
   routeExternalLinks(window);
+  watchRendererHealth(window);
   confirmOnClose(window);
   window.loadURL(DEV_SERVER_URL || APP_URL); // an empty variable is no dev server either
 }
 
+// macOS hands an opened document to the running app instead of launching it with argv
+app.on("open-file", (event, filePath) => {
+  event.preventDefault();
+  void intakeMapFile(filePath);
+});
+
+app.on("child-process-gone", (_event, details) => {
+  console.error(`Child process gone (${details.type}):`, details.reason);
+});
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  app.on("second-instance", (_event, argv) => {
+    const mapFile = collectMapFileFromArgv(argv);
+    if (mapFile) void intakeMapFile(mapFile);
+
     const [window] = BrowserWindow.getAllWindows();
     if (!window) return createWindow();
     if (window.isMinimized()) window.restore();
@@ -312,6 +614,11 @@ if (!app.requestSingleInstanceLock()) {
     buildMenu();
     createWindow();
     initUpdater(allowClose); // app-wide, so re-opening a window on macOS does not start a second updater
+
+    // launched by double-clicking a .map file: queue it, the renderer pulls it on boot
+    const initialFile = collectMapFileFromArgv(process.argv);
+    if (initialFile) void intakeMapFile(initialFile);
+
     app.on("activate", () => BrowserWindow.getAllWindows().length === 0 && createWindow());
   });
 

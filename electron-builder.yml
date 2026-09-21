@@ -8,8 +8,17 @@ files:
   - package.json
   - "!node_modules/**/*" # the renderer is bundled by Vite, the main process only needs Electron itself
 asar: true
+# store, not compress: the bundle is already minified, and skipping decompression
+# makes both the install and every cold start noticeably faster
+compression: store
 afterPack: ./scripts/adhoc-sign.mjs
 artifactName: fmg-${version}-${os}-${arch}.${ext}
+# double-clicking a saved map opens it in the app (see electron/main.ts file intake)
+fileAssociations:
+  - ext: map
+    name: Fantasy Map Generator Map
+    description: Fantasy Map Generator save file
+    role: Editor
 mac:
   category: public.app-category.graphics-design
   target:
@@ -18,6 +27,8 @@ mac:
     - target: zip
       arch: [arm64, x64]
 win:
+  icon: build/icon.ico # generated from build/icon.png by scripts/electron.mjs when missing
+  requestedExecutionLevel: asInvoker # per-user install needs no admin rights and no UAC prompt
   target:
     - target: nsis
       arch: [x64, arm64]
@@ -36,6 +47,11 @@ nsis:
   allowToChangeInstallationDirectory: true
   # otherwise a third installer carrying both architectures is built next to the per-arch ones
   buildUniversalInstaller: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Fantasy Map Generator
+  uninstallDisplayName: Fantasy Map Generator
+  packElevateHelper: false
 publish:
   provider: github
   releaseType: draft

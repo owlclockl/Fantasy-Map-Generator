@@ -15,6 +15,8 @@
 .serena/project.yml
 /dist-electron
 /release
+# generated from build/icon.png by scripts/electron.mjs when a Windows installer is built
+build/icon.ico
 .DS_Store
 
 # nix build output

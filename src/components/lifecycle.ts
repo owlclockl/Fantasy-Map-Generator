@@ -16,6 +16,7 @@ import { Controllers } from "@/controllers";
 import { getPointsNumber } from "@/data/graph-density";
 import { GenerationPipeline } from "@/generators/generation-pipeline";
 import { initiateAutosave } from "@/services/autosave";
+import { subscribeToMapFiles } from "@/services/electron-files";
 import { stashCallbackToken } from "@/services/help/auth";
 import { logStats } from "@/services/logging";
 import { registerServiceWorker } from "@/services/platform";
@@ -36,6 +37,8 @@ export async function boot(): Promise<void> {
   restoreUi();
   setViewportSize(options.map.graph.width, options.map.graph.height);
   applyDefaultViewboxEvents();
+
+  subscribeToMapFiles(); // desktop: files arriving while the app runs open themselves
 
   if (!warnIfServerless()) {
     hideLoading();

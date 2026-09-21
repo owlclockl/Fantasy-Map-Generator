@@ -1,7 +1,13 @@
+export type ElectronMapFile = { name: string; data: Uint8Array<ArrayBuffer> };
+
 export type ElectronBridge = {
   isElectron: true;
   platform: string;
   versions: { electron: string; chrome: string; node: string };
+  /** Pull the oldest .map file queued by the main process, if there is one */
+  getPendingMapFile?: () => Promise<ElectronMapFile | null>;
+  /** Fired after `getPendingMapFile` gains something to return. Returns an unsubscribe function */
+  onOpenMapFile?: (listener: () => void) => () => void;
 };
 
 export const isElectron = (): boolean => Boolean(window.electron?.isElectron);
