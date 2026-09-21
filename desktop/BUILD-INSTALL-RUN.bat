@@ -27,6 +27,12 @@ if errorlevel 1 (
 )
 for /f "delims=" %%V in ('node -v') do set "NODE_VER=%%V"
 echo [OK] Node.js !NODE_VER!
+for /f "tokens=1 delims=." %%M in ("!NODE_VER:v=!") do set "NODE_MAJOR=%%M"
+if !NODE_MAJOR! LSS 24 (
+  echo [ОШИБКА] Требуется Node.js 24+. У вас: !NODE_VER!.
+  echo Скачайте LTS-версию с https://nodejs.org, установите и запустите снова.
+  goto :fail
+)
 echo.
 
 rem --- Шаг 2: зависимости ---
