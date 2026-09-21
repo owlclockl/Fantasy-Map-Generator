@@ -17,6 +17,7 @@ import {
   screen,
   shell
 } from "electron";
+import { initMobileServerIPC, stopMobileServer } from "./mobile-server";
 import { checkForUpdatesNow, initUpdater } from "./updater";
 
 const SCHEME = "app";
@@ -614,6 +615,7 @@ if (!app.requestSingleInstanceLock()) {
     buildMenu();
     createWindow();
     initUpdater(allowClose); // app-wide, so re-opening a window on macOS does not start a second updater
+    initMobileServerIPC(); // the phone pairing server; the renderer decides when it runs
 
     // launched by double-clicking a .map file: queue it, the renderer pulls it on boot
     const initialFile = collectMapFileFromArgv(process.argv);
@@ -622,5 +624,6 @@ if (!app.requestSingleInstanceLock()) {
     app.on("activate", () => BrowserWindow.getAllWindows().length === 0 && createWindow());
   });
 
+  app.on("will-quit", () => void stopMobileServer());
   app.on("window-all-closed", () => process.platform !== "darwin" && app.quit());
 }

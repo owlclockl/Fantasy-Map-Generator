@@ -1,5 +1,6 @@
 import { hsl, select } from "d3";
 import { applyZoomExtent, fitMapToScreen, setViewport } from "@/components/canvas";
+import { mountMobileServerSection } from "@/components/options/mobile-server-settings";
 import { DEFAULT_THEME_COLOR } from "@/components/options-model";
 import type { OptionsData } from "@/components/options-schema";
 import {
@@ -697,6 +698,7 @@ function getOptionsTemplate(): string {
       <td></td>
     </tr>
   </table>
+  <div id="mobileServerSection" class="mobileServerSection"></div>
   <div>
     <button
       id="configureWorld"
@@ -752,6 +754,7 @@ const pendingInputs = new WeakMap<HTMLElement, string>();
 ensureEl("optionsContent").innerHTML = TEMPLATE;
 addListeners();
 loadVoices();
+mountMobileServerSection();
 onPerformanceChange(() => syncOption("performancePreset")); // the preset follows the fields, wherever they change
 
 function addListeners(): void {

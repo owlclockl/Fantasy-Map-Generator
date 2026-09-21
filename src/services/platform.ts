@@ -1,5 +1,32 @@
 export type ElectronMapFile = { name: string; data: Uint8Array<ArrayBuffer> };
 
+/** what the renderer tells the phone server about the map on screen; network fields are the main process' own */
+export type ElectronMapState = {
+  hasMap: boolean;
+  mapName: string;
+  seed: string;
+  width: number;
+  height: number;
+  mapUpdatedAt: number | null;
+  tiles: { template: string; minZoom: number; maxZoom: number };
+};
+
+export type ElectronServerRequest = {
+  id: number;
+  type: "tile" | "getBurg" | "getState" | "command" | "getLightPack";
+  payload: unknown;
+};
+
+export type ElectronMobileServerApi = {
+  info: () => Promise<{ running: boolean; port: number | null; clients: number; ips: string[]; hostname: string }>;
+  start: (config: { port: number; token: string }, version: string) => Promise<{ port: number }>;
+  stop: () => Promise<void>;
+  publish: (mapState: ElectronMapState, lightPack: string | null) => Promise<void>;
+  progress: (detail: { stepId: string; completed: number; total: number }) => void;
+  generationError: (message: string) => void;
+  onServerRequest: (handler: (request: ElectronServerRequest) => Promise<unknown>) => () => void;
+};
+
 export type ElectronBridge = {
   isElectron: true;
   platform: string;
@@ -8,6 +35,8 @@ export type ElectronBridge = {
   getPendingMapFile?: () => Promise<ElectronMapFile | null>;
   /** Fired after `getPendingMapFile` gains something to return. Returns an unsubscribe function */
   onOpenMapFile?: (listener: () => void) => () => void;
+  /** The phone pairing server bridge; present when the desktop build is new enough */
+  mobileServer?: ElectronMobileServerApi;
 };
 
 export const isElectron = (): boolean => Boolean(window.electron?.isElectron);

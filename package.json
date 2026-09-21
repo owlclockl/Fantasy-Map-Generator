@@ -28,7 +28,8 @@
     "lint": "biome check --write",
     "sync-version": "node scripts/sync-version.js",
     "stamp-assets": "node scripts/stamp-assets.js",
-    "prepare": "simple-git-hooks"
+    "prepare": "simple-git-hooks",
+    "mobile:demo": "rolldown -c scripts/mobile-demo/rolldown.config.mjs && node scripts/mobile-demo/server.build.mjs"
   },
   "simple-git-hooks": {
     "pre-commit": "npm run lint && node scripts/sync-version.js --stage && node scripts/stamp-assets.js --stage"
@@ -43,6 +44,7 @@
     "@types/lineclip": "^2.0.0",
     "@types/node": "^25.0.10",
     "@types/polylabel": "^1.1.3",
+    "@types/qrcode": "^1.5.6",
     "@types/three": "^0.184.1",
     "@vitest/browser": "^4.1.11",
     "@vitest/browser-playwright": "^4.1.11",
@@ -63,6 +65,7 @@
     "driver.js": "^1.4.0",
     "lineclip": "^2.0.0",
     "polylabel": "^2.0.1",
+    "qrcode": "^1.5.4",
     "quill": "^2.0.3",
     "three": "^0.184.0",
     "zod": "^4.4.3"

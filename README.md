@@ -12,6 +12,8 @@ Refer to the [project wiki](https://github.com/Azgaar/Fantasy-Map-Generator/wiki
 
 [![preview](https://github.com/Azgaar/Fantasy-Map-Generator/assets/26469650/b0d0efde-a0d1-4e80-8818-ea3dd83c2323)](https://github.com/Azgaar/Fantasy-Map-Generator/assets/26469650/b0d0efde-a0d1-4e80-8818-ea3dd83c2323)
 
+**Mobile companion:** the desktop app can serve the current map to a phone over Wi-Fi - the PC computes and renders, the phone displays raster tiles at 60 FPS. Pairing via QR, live generation progress, offline cache. See [docs/architecture/mobile-offload.md](docs/architecture/mobile-offload.md) and [mobile/](mobile/).
+
 Join our [Discord server](https://discordapp.com/invite/X7E84HU) and [Reddit community](https://www.reddit.com/r/FantasyMapGenerator) to share your creations, discuss the Generator, suggest ideas and get the most recent updates.
 
 Report bugs with the [bug report form](https://github.com/Azgaar/Fantasy-Map-Generator/issues/new?template=bug_report.yml), suggest features in [Ideas discussions](https://github.com/Azgaar/Fantasy-Map-Generator/discussions/categories/ideas), and ask usage questions in [Q&A](https://github.com/Azgaar/Fantasy-Map-Generator/discussions/categories/q-a). Search existing reports first. For bugs, include your FMG version, browser/OS, reproduction steps and an affected `.map` file in a ZIP archive when relevant. For ideas, explain the problem and your use case.

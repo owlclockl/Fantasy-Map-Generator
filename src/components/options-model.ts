@@ -14,6 +14,7 @@ import { Labels } from "@/generators/labels-generator";
 import { Military } from "@/generators/military-generator";
 import { Names } from "@/generators/names-generator";
 import { Transports } from "@/generators/transports-generator";
+import { MOBILE_DEFAULT_PORT } from "@/types/mobile-protocol";
 import { safeParseJSON } from "@/utils";
 import { rn } from "@/utils/numberUtils";
 import { deepMerge } from "@/utils/objectUtils";
@@ -91,6 +92,7 @@ class OptionsModel {
         zoomExtent: { min: 1, max: 20 },
         viewport: null,
         autosave: { interval: 15, remind: true },
+        mobileServer: { autoStart: false, port: MOBILE_DEFAULT_PORT },
         ui: {
           size: null,
           tooltipSize: 14,

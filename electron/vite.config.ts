@@ -29,5 +29,8 @@ export default {
       external: ["electron", ...builtinModules, ...builtinModules.map(name => `node:${name}`)]
     }
   },
-  resolve: { conditions: ["node"] }
+  resolve: {
+    conditions: ["node"],
+    alias: { "@": resolve("../src") } // the main process shares src modules (mobile server, protocol types)
+  }
 };

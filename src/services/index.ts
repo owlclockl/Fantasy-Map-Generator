@@ -3,6 +3,7 @@ import "./platform";
 import "./assistant";
 import "./autosave";
 import "./fonts";
+import "./mobile-server/app"; // inert on the web; on desktop it mirrors the map to paired phones
 import "./url-params";
 import "./versioning";
 
@@ -12,6 +13,7 @@ export const Services = createRegistry({
   ExportJson: () => import("@/services/io/export-json").then(m => m.ExportJson),
   ExportMap: () => import("@/services/io/export").then(m => m.ExportMap),
   Load: () => import("@/services/io/load").then(m => m.Load),
+  MobileServer: () => import("@/services/mobile-server/app").then(m => m.MobileServer),
   Save: () => import("@/services/io/save").then(m => m.Save),
   UiTour: () => import("@/services/ui-tour").then(m => m.UiTour)
 });

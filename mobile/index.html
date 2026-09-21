@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#1c2431" />
+    <title>FMG Mobile</title>
+  </head>
+  <body>
+    <div id="app">
+      <header id="topbar" class="hidden">
+        <button id="btnDisconnect" class="ghost" aria-label="Disconnect">✕</button>
+        <div id="topbarInfo">
+          <span id="topbarName">PC</span>
+          <span id="topbarStatus" class="badge">…</span>
+        </div>
+        <button id="btnLayers" class="ghost" aria-label="Layers">☰</button>
+      </header>
+      <main id="mapView" class="hidden">
+        <div id="map"></div>
+        <button id="btnGenerate" title="Generate">✨</button>
+        <div id="progressOverlay" class="hidden">
+          <div class="progressCard">
+            <div id="progressText">…</div>
+            <div class="progressTrack"><div id="progressBar"></div></div>
+          </div>
+        </div>
+        <div id="detailsSheet" class="hidden"></div>
+      </main>
+      <section id="pairingView"></section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

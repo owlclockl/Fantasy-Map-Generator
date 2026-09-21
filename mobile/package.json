@@ -1,0 +1,27 @@
+{
+  "name": "fantasy-map-mobile",
+  "productName": "FMG Mobile",
+  "private": true,
+  "version": "1.153.1",
+  "type": "module",
+  "description": "Thin mobile client for Fantasy Map Generator: shows the map the desktop app computes and renders",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@capacitor/barcode-scanner": "^3.1.2",
+    "@capacitor/core": "^8.5.2",
+    "leaflet": "^1.9.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
+    "@types/leaflet": "^1.9.22",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.16"
+  }
+}

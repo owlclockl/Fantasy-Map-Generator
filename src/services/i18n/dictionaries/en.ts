@@ -147,6 +147,27 @@ export const en = {
     activeWorkers: "Active workers",
     tasksCompleted: "Tasks completed"
   },
+  // Mobile server (phone pairing)
+  mobile: {
+    title: "Mobile Server",
+    description:
+      "Show this map on a phone: the PC generates and renders everything, the phone just displays it. Both devices must share the same network",
+    webOnly: "Available only in the desktop app",
+    port: "Port",
+    autoStart: "Start automatically on map load",
+    start: "Start server",
+    stop: "Stop server",
+    running: "Running",
+    stopped: "Stopped",
+    clients: "Connected devices",
+    pairing: "Scan this QR code with the mobile app",
+    urls: "Or pair manually with an address:",
+    copy: "Copy pairing code",
+    copied: "Pairing code copied",
+    newToken: "New code",
+    newTokenTip: "Generate a new pairing code: previously paired phones will be disconnected",
+    noMap: "Generate or load a map - phones will see it once it is on screen"
+  },
   // Dialogs
   dialogs: {
     confirm: "Confirm",

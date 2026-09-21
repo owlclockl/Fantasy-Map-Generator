@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { LayerId } from "@/components/layers";
 import { MAX_DENSITY, MIN_DENSITY } from "@/data/graph-density";
 import { CULTURE_SETS } from "@/generators/cultures-generator";
+import { MOBILE_DEFAULT_PORT } from "@/types/mobile-protocol";
 import { count, degrees, hexColor, ids, nonNegative, percent, positive, ratio } from "@/utils/schemaUtils";
 
 /** the burg request at its maximum stands for "as many burgs as the land supports" */
@@ -192,6 +193,9 @@ export const optionsSchema = z.strictObject({
     // the map window on screen. null until the user sets one: it then follows the browser window
     viewport: z.strictObject({ width: positive, height: positive }).nullable(),
     autosave: z.strictObject({ interval: count, remind: z.boolean() }), // interval in minutes, 0 is off
+    mobileServer: z
+      .strictObject({ autoStart: z.boolean(), port: count.min(1024).max(65535) })
+      .default({ autoStart: false, port: MOBILE_DEFAULT_PORT }), // the phone pairing server
     ui: z.strictObject({
       size: positive.nullable(), // null until the user picks one: the interface follows the extent
       tooltipSize: positive,

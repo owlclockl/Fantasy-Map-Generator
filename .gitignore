@@ -22,3 +22,4 @@ build/icon.ico
 # nix build output
 /result
 /result-*
+scripts/mobile-demo/server.build.mjs

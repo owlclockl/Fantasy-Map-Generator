@@ -4,6 +4,10 @@
     "lib": ["ES2023"],
     "module": "CommonJS",
     "moduleResolution": "Node",
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["src/*"]
+    },
     "types": ["node"],
     "strict": true,
     "noUnusedLocals": true,
@@ -12,5 +16,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["main.ts", "preload.ts", "updater.ts"]
+  "include": ["main.ts", "preload.ts", "updater.ts", "mobile-server.ts"]
 }
