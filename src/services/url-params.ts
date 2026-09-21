@@ -10,6 +10,7 @@ import { zoomTo } from "@/components/zoom";
 import type { Burg } from "@/generators/burgs-generator";
 import { Services } from "@/services";
 import { toggleAssistant } from "@/services/assistant";
+import { consumePendingMapFile } from "@/services/electron-files";
 import { getRequestedMapSize } from "@/services/map-size";
 import { ensureEl } from "@/utils/nodeUtils";
 
@@ -19,6 +20,9 @@ const searchParams = () => new URL(window.location.href).searchParams;
 
 /** Decide what to put on screen on start-up: a linked map, a stored map, or a fresh one */
 export async function checkLoadParameters(): Promise<void> {
+  // desktop: a double-clicked .map file wins over every other start-up source
+  if (await consumePendingMapFile()) return;
+
   const params = searchParams();
 
   // a linked map is generated at the size the link asks for, whatever the window measures

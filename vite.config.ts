@@ -14,19 +14,29 @@ const stripWebOnlyTags = {
       .replace(/<link rel="manifest"[^>]*>\s*/, "")
 };
 
-export default ({ mode }: { mode: string }) => ({
-  root: "./src",
-  base: mode === "electron" ? "./" : process.env.NETLIFY ? "/" : "/Fantasy-Map-Generator/",
-  plugins: mode === "electron" ? [stripWebOnlyTags] : [],
-  build: {
-    outDir: mode === "electron" ? "../dist-electron/renderer" : "../dist",
-    assetsDir: "./",
-    emptyOutDir: true // outDir sits outside root, so Vite would otherwise keep every past build's chunks
-  },
-  publicDir: "../public",
-  resolve: {
-    alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url))
+export default ({ mode }: { mode: string }) => {
+  const isElectron = mode === "electron";
+
+  return {
+    root: "./src",
+    base: isElectron ? "./" : process.env.NETLIFY ? "/" : "/Fantasy-Map-Generator/",
+    plugins: isElectron ? [stripWebOnlyTags] : [],
+    build: {
+      outDir: isElectron ? "../dist-electron/renderer" : "../dist",
+      assetsDir: "./",
+      emptyOutDir: true, // outDir sits outside root, so Vite would otherwise keep every past build's chunks
+      sourcemap: false, // maps are dead weight in a shipped bundle; the packaged app keeps DevTools regardless
+      // minify stays at the Vite default (oxc): faster than esbuild, same output quality
+      reportCompressedSize: false, // gzipping the report doubles build time, the output is identical
+      chunkSizeWarningLimit: 2000, // the map bundle is big by nature; a warning per build helps no one
+      // the desktop Chromium is evergreen, so skip the legacy downleveling the web build needs
+      ...(isElectron ? { target: "chrome120" } : {})
+    },
+    publicDir: "../public",
+    resolve: {
+      alias: {
+        "@": fileURLToPath(new URL("./src", import.meta.url))
+      }
     }
-  }
-});
+  };
+};

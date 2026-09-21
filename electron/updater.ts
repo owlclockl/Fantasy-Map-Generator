@@ -10,6 +10,8 @@ const CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const CAN_SELF_INSTALL = process.platform === "win32" || Boolean(process.env.APPIMAGE);
 
 let reportErrors = false;
+let manualCheck = false; // a menu-invoked check reports its outcome even when there is nothing new
+
 function ask(options: MessageBoxOptions): Promise<number> {
   const window = BrowserWindow.getAllWindows().find(candidate => !candidate.isDestroyed());
   const result = window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options);
@@ -18,6 +20,7 @@ function ask(options: MessageBoxOptions): Promise<number> {
 
 function onError(error: Error): void {
   console.error("Update failed:", error);
+  manualCheck = false;
   if (!reportErrors) return;
 
   ask({
@@ -43,6 +46,7 @@ export function initUpdater(allowClose: () => void): void {
   autoUpdater.on("error", onError);
 
   autoUpdater.on("update-available", ({ version }) => {
+    manualCheck = false; // the version dialog below is the answer to a manual check too
     const question = {
       type: "info" as const,
       defaultId: 0,
@@ -72,6 +76,19 @@ export function initUpdater(allowClose: () => void): void {
     });
   });
 
+  autoUpdater.on("update-not-available", () => {
+    if (!manualCheck) return; // background checks stay silent when there is nothing new
+    manualCheck = false;
+    ask({
+      type: "info",
+      buttons: ["OK"],
+      defaultId: 0,
+      title: "No updates",
+      message: "You have the latest version",
+      detail: `Fantasy Map Generator ${app.getVersion()} is up to date`
+    });
+  });
+
   autoUpdater.on("update-downloaded", ({ version }) => {
     ask({
       type: "info",
@@ -95,4 +112,22 @@ export function initUpdater(allowClose: () => void): void {
 
   setTimeout(check, FIRST_CHECK_DELAY);
   setInterval(check, CHECK_INTERVAL);
+}
+
+/** Menu-invoked check: reports its outcome, whether or not an update exists */
+export function checkForUpdatesNow(): void {
+  if (!app.isPackaged) {
+    ask({
+      type: "info",
+      buttons: ["OK"],
+      defaultId: 0,
+      title: "Development build",
+      message: "Update check is only available in the packaged app",
+      detail: "Run a built installer to receive updates"
+    });
+    return;
+  }
+  manualCheck = true;
+  reportErrors = true;
+  autoUpdater.checkForUpdates().catch(() => {}); // the "error" event already reports it
 }

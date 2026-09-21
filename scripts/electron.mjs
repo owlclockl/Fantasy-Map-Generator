@@ -11,6 +11,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { build as viteBuild, createServer } from "vite";
 
 const TSC = "node_modules/typescript/bin/tsc";
@@ -38,6 +39,35 @@ async function buildRenderer() {
   await viteBuild({ mode: "electron" });
 }
 
+/**
+ * The Windows installer wants an .ico, the repo carries a .png. A single PNG-compressed entry
+ * is a valid icon since Vista, so wrap the PNG instead of committing a second binary.
+ * A hand-made multi-size icon dropped at build/icon.ico always wins over the generated one
+ */
+function ensureWindowsIcon() {
+  const pngPath = "build/icon.png";
+  const icoPath = "build/icon.ico";
+  if (existsSync(icoPath) || !existsSync(pngPath)) return;
+
+  const png = readFileSync(pngPath);
+  const width = png.readUInt32BE(16);
+  const height = png.readUInt32BE(20);
+  const header = Buffer.alloc(6 + 16);
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(1, 2); // .ico type
+  header.writeUInt16LE(1, 4); // one image
+  header.writeUInt8(width >= 256 ? 0 : width, 6); // 0 means 256 in icon directories
+  header.writeUInt8(height >= 256 ? 0 : height, 7);
+  header.writeUInt8(0, 8); // palette: none
+  header.writeUInt8(0, 9); // reserved
+  header.writeUInt16LE(1, 10); // color planes
+  header.writeUInt16LE(32, 12); // bits per pixel
+  header.writeUInt32LE(png.length, 14); // image size
+  header.writeUInt32LE(6 + 16, 18); // image offset
+  writeFileSync(icoPath, Buffer.concat([header, png]));
+  console.log("Windows icon generated: build/icon.ico");
+}
+
 async function dev() {
   await buildMain();
 
@@ -57,7 +87,10 @@ if (task === "dev") {
 } else if (task === "build" || task === "dist") {
   await buildMain();
   await buildRenderer();
-  if (task === "dist") await run(ELECTRON_BUILDER, builderArgs);
+  if (task === "dist") {
+    ensureWindowsIcon();
+    await run(ELECTRON_BUILDER, builderArgs);
+  }
 } else {
   console.error(`Unknown task "${task}". Expected: dev, build or dist`);
   process.exit(1);
