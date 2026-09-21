@@ -172,12 +172,11 @@ if errorlevel 1 (
 )
 for /f "delims=" %%V in ('node -v') do set "NODE_VER=%%V"
 echo [OK] Node.js !NODE_VER! найден.
-set "NODE_MAJOR=!NODE_VER:~1,2!"
-set "NODE_MAJOR=!NODE_MAJOR:.=!"
-if !NODE_MAJOR! GEQ 24 (
-  echo [OK] Версия подходит (требуется 24 или новее).
-) else (
-  echo [ПРЕДУПРЕЖДЕНИЕ] Рекомендуется Node.js 24+, иначе сборка может не получиться.
+for /f "tokens=1 delims=." %%M in ("!NODE_VER:v=!") do set "NODE_MAJOR=%%M"
+if !NODE_MAJOR! LSS 24 (
+  echo [ОШИБКА] Требуется Node.js 24+. У вас: !NODE_VER!.
+  echo Скачайте LTS-версию с https://nodejs.org, установите и запустите снова.
+  exit /b 1
 )
 where npm >nul 2>nul
 if errorlevel 1 (
