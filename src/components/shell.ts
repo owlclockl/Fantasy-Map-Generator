@@ -5,8 +5,10 @@ import { Pins } from "@/components/pins";
 import { showDataTip } from "@/components/tooltips";
 import { Controllers } from "@/controllers";
 import { Services } from "@/services";
+import { i18n } from "@/services/i18n";
 import { isElectron, isLocalhost } from "@/services/platform";
 import { ensureEl, findEl } from "@/utils";
+import { getGenerationWorkerPool, getGlobalWorkerPool } from "@/utils/worker-pool";
 import { fitMapToScreen } from "./canvas";
 
 /** Wire the window up: the svg layer scaffold and the browser-level behaviours around it. Called by boot() */
@@ -19,9 +21,126 @@ export function initShell(): void {
   addDragToUpload();
   initTourPromptButton();
   initHelpAssistantBubble();
+  initModernUI();
+  initI18n();
+  initWorkerPools();
 
   if (!isLocalhost() && !isElectron()) window.onbeforeunload = () => "Are you sure you want to navigate away?";
   if (isElectron()) removeWebOnlyControls();
+}
+
+function initModernUI(): void {
+  // Add modern UI class to body
+  document.body.classList.add("modern-ui");
+
+  // Improve options trigger with icon
+  const trigger = findEl("optionsTrigger");
+  if (trigger) {
+    trigger.innerHTML = `<span style="font-size:1.2em">☰</span> <span data-i18n="menu.showMenu" style="font-size:0.85em; margin-left:4px">Menu</span>`;
+    trigger.setAttribute("aria-label", "Open menu");
+  }
+
+  // Improve regenerate button
+  const regen = findEl("regenerate");
+  if (regen) {
+    regen.innerHTML = `✨ ${regen.textContent}`;
+  }
+
+  // Add performance indicator
+  const indicator = document.createElement("div");
+  indicator.id = "performanceIndicator";
+  indicator.innerHTML = `<span class="indicator-dot"></span><span id="perfText">Ready</span>`;
+  indicator.style.display = "none";
+  document.body.appendChild(indicator);
+
+  // Show indicator when workers active
+  window.addEventListener("generation:progress", (e: any) => {
+    const { stepId, percentage } = e.detail;
+    const perfText = document.getElementById("perfText");
+    const perfIndicator = document.getElementById("performanceIndicator");
+    if (perfText && perfIndicator) {
+      perfIndicator.style.display = "flex";
+      perfText.textContent = `${stepId}: ${percentage}%`;
+    }
+  });
+
+  window.addEventListener("map:generated", () => {
+    const perfIndicator = document.getElementById("performanceIndicator");
+    if (perfIndicator) {
+      const perfText = document.getElementById("perfText");
+      if (perfText) perfText.textContent = "✓ Map ready";
+      setTimeout(() => {
+        perfIndicator.style.display = "none";
+      }, 3000);
+    }
+  });
+
+  // Add smooth transitions to options panel
+  const options = findEl("options");
+  if (options) {
+    options.addEventListener("transitionend", () => {
+      // Ensure proper display after animation
+    });
+  }
+}
+
+function initI18n(): void {
+  try {
+    const lang = i18n.getLanguage();
+    document.documentElement.lang = lang;
+
+    // Translate initial UI
+    const dict = i18n.getDictionary();
+
+    // Update tab labels if already rendered
+    const tabMap: Record<string, keyof typeof dict.tabs> = {
+      layersTab: "layers",
+      styleTab: "style",
+      optionsTab: "options",
+      toolsTab: "tools",
+      aboutTab: "about"
+    };
+
+    for (const [id, key] of Object.entries(tabMap)) {
+      const el = document.getElementById(id);
+      if (el && dict.tabs[key]) {
+        el.textContent = dict.tabs[key];
+      }
+    }
+
+    // Listen for language changes
+    window.addEventListener("language:changed", (e: any) => {
+      const newLang = e.detail.language;
+      document.documentElement.lang = newLang;
+      INFO && console.log(`Language changed to ${newLang}`);
+    });
+  } catch (error) {
+    console.warn("i18n init failed", error);
+  }
+}
+
+function initWorkerPools(): void {
+  try {
+    const globalPool = getGlobalWorkerPool();
+    const genPool = getGenerationWorkerPool();
+
+    INFO &&
+      console.log(
+        `Worker pools initialized: global=${globalPool.getMaxWorkers()}, generation=${genPool.getMaxWorkers()}`
+      );
+
+    // Expose for debugging
+    (window as any).WorkerPools = {
+      global: globalPool,
+      generation: genPool,
+      getStats: () => ({
+        global: globalPool.getStats(),
+        generation: genPool.getStats()
+      })
+    };
+  } catch (error) {
+    console.warn("Worker pools init failed, falling back to single thread", error);
+  }
 }
 
 /** Keep the next unpinned map request in step with the browser window. */

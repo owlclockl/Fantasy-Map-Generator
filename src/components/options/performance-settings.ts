@@ -7,6 +7,8 @@ import {
   setPerformanceSetting
 } from "@/components/performance";
 import { ensureEl } from "@/utils/nodeUtils";
+import { i18n } from "@/services/i18n";
+import { getGenerationWorkerPool, getGlobalWorkerPool } from "@/utils/worker-pool";
 
 const DIALOG_ID = "performanceSettings";
 const DEFAULTS = PERFORMANCE_PRESETS.balance;
@@ -69,8 +71,9 @@ function open(): void {
   const unsubscribe = onPerformanceChange(sync); // a preset picked on the Options tab shows here too
 
   $(`#${DIALOG_ID}`).dialog({
-    title: "Performance Settings",
+    title: i18n.getLanguage() === "ru" ? "Настройки производительности" : "Performance Settings",
     resizable: false,
+    width: "420px",
     position: { my: "right top", at: "right-10 top+10", of: "svg" },
     close: () => {
       unsubscribe();
@@ -88,6 +91,44 @@ function render(): void {
     select.addEventListener("change", () => update(key, select.value));
     ensureEl(`${DIALOG_ID}_${key}Reset`).addEventListener("click", () => update(key, String(DEFAULTS[key])));
   }
+
+  // Threading controls
+  try {
+    const threadingEnabledSelect = document.getElementById(`${DIALOG_ID}_threadingEnabled`) as HTMLSelectElement | null;
+    if (threadingEnabledSelect) {
+      threadingEnabledSelect.addEventListener("change", e => {
+        const enabled = (e.target as HTMLSelectElement).value === "true";
+        Options.set(o => (o.app.ui.threading.enabled = enabled));
+      });
+    }
+
+    const workersInput = document.getElementById(`${DIALOG_ID}_workers`) as HTMLInputElement | null;
+    if (workersInput) {
+      workersInput.addEventListener("change", e => {
+        const count = Number((e.target as HTMLInputElement).value);
+        Options.set(o => (o.app.ui.threading.workers = count));
+        try {
+          getGenerationWorkerPool().setMaxWorkers(count);
+          getGlobalWorkerPool().setMaxWorkers(Math.max(2, count - 1));
+        } catch {}
+        syncThreadingStats();
+      });
+    }
+  } catch {}
+
+  syncThreadingStats();
+  const interval = setInterval(syncThreadingStats, 1000);
+
+  const dialog = document.getElementById(DIALOG_ID);
+  if (dialog) {
+    const observer = new MutationObserver(() => {
+      if (!document.getElementById(DIALOG_ID)) {
+        clearInterval(interval);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
 }
 
 /** A select carries strings; the field decides what the string means */
@@ -103,16 +144,44 @@ function sync(): void {
   ensureEl(`${DIALOG_ID}Preset`).textContent = presetLabel();
 }
 
+function syncThreadingStats(): void {
+  try {
+    const genStats = getGenerationWorkerPool().getStats();
+    const globalStats = getGlobalWorkerPool().getStats();
+
+    const genEl = document.getElementById(`${DIALOG_ID}_genStats`);
+    if (genEl) {
+      genEl.textContent = `${genStats.busyWorkers}/${genStats.totalWorkers} busy, ${genStats.completedTasks} completed`;
+    }
+
+    const globalEl = document.getElementById(`${DIALOG_ID}_globalStats`);
+    if (globalEl) {
+      globalEl.textContent = `${globalStats.busyWorkers}/${globalStats.totalWorkers} busy, ${globalStats.completedTasks} completed`;
+    }
+
+    const supportEl = document.getElementById(`${DIALOG_ID}_support`);
+    if (supportEl) {
+      supportEl.textContent = genStats.isSupported ? "✅ Supported" : "❌ Not supported (fallback)";
+    }
+
+    const hwEl = document.getElementById(`${DIALOG_ID}_hw`);
+    if (hwEl) {
+      hwEl.textContent = `${navigator.hardwareConcurrency || "unknown"} cores`;
+    }
+  } catch {}
+}
+
 const presetLabel = (): string => PRESET_LABELS[resolvePerformancePreset(options.app.performance)];
 
 function buildDialogHTML(): string {
   const current = options.app.performance;
+  const isRu = i18n.getLanguage() === "ru";
+  const ui = options.app.ui;
+
   const rows = SETTINGS.map(({ key, label, tip, choices }) => {
     const value = String(current[key]);
     const optionsHtml = choices
-      .map(
-        choice => `<option value="${choice.value}" ${choice.value === value ? "selected" : ""}>${choice.label}</option>`
-      )
+      .map(choice => `<option value="${choice.value}" ${choice.value === value ? "selected" : ""}>${choice.label}</option>`)
       .join("");
     return /* html */ `
       <tr data-tip="${tip}">
@@ -133,6 +202,53 @@ function buildDialogHTML(): string {
       <table style="border-collapse: collapse; width: 100%">
         <tbody>${rows}</tbody>
       </table>
+
+      <div style="margin-top:1em; padding-top:1em; border-top:1px solid #e5e7eb">
+        <h4 style="margin:0 0 0.5em 0; font-size:1em; font-weight:700; display:flex; align-items:center; gap:6px">
+          ⚡ ${isRu ? "Многопоточность (Web Workers)" : "Multithreading (Web Workers)"}
+        </h4>
+
+        <table style="border-collapse: collapse; width: 100%; font-size:0.9em">
+          <tr>
+            <td>${isRu ? "Статус поддержки" : "Support status"}</td>
+            <td><span id="${DIALOG_ID}_support">checking...</span></td>
+          </tr>
+          <tr>
+            <td>${isRu ? "Ядра процессора" : "Hardware cores"}</td>
+            <td><span id="${DIALOG_ID}_hw">${navigator.hardwareConcurrency || "unknown"}</span></td>
+          </tr>
+          <tr data-tip="Enable or disable multithreading">
+            <td>${isRu ? "Многопоточность" : "Threading"}</td>
+            <td>
+              <select id="${DIALOG_ID}_threadingEnabled" style="width:100%">
+                <option value="true" ${ui.threading.enabled ? "selected" : ""}>${isRu ? "Включено" : "Enabled"}</option>
+                <option value="false" ${!ui.threading.enabled ? "selected" : ""}>${isRu ? "Отключено" : "Disabled"}</option>
+              </select>
+            </td>
+          </tr>
+          <tr data-tip="Number of worker threads">
+            <td>${isRu ? "Потоки воркеров" : "Worker threads"}</td>
+            <td>
+              <input id="${DIALOG_ID}_workers" type="range" min="1" max="8" value="${ui.threading.workers}" style="width:60%">
+              <output>${ui.threading.workers}</output>
+            </td>
+          </tr>
+          <tr>
+            <td>${isRu ? "Генерация" : "Generation pool"}</td>
+            <td><span id="${DIALOG_ID}_genStats" style="font-family:monospace; font-size:0.85em">-</span></td>
+          </tr>
+          <tr>
+            <td>${isRu ? "Глобальный пул" : "Global pool"}</td>
+            <td><span id="${DIALOG_ID}_globalStats" style="font-family:monospace; font-size:0.85em">-</span></td>
+          </tr>
+        </table>
+
+        <div style="margin-top:0.8em; padding:8px 10px; background:#f3f4f6; border-radius:8px; font-size:0.8em; color:#6b7280; border-left:3px solid #6366f1">
+          ${isRu
+            ? "💡 Многопоточность ускоряет генерацию карты, используя все ядра процессора. Если возникают проблемы, отключите её."
+            : "💡 Multithreading speeds up map generation by using all CPU cores. If you experience issues, disable it."}
+        </div>
+      </div>
     </div>`;
 }
 

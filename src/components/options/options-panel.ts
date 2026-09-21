@@ -1,4 +1,5 @@
 // The collapsible panel on the right and the sticked menu below it
+// Enhanced with modern UI, animations, and i18n
 import { showExportPane, showLoadPane, showSavePane } from "@/components/options/io-panes";
 import { changeViewMode } from "@/components/options/view-mode";
 import { clearMainTip } from "@/components/tooltips";
@@ -6,6 +7,7 @@ import { resetZoom } from "@/components/zoom";
 import { Controllers } from "@/controllers";
 import { ARROW_TIP_KEY } from "@/services/versioning";
 import { ensureEl, findEl } from "@/utils/nodeUtils";
+import { i18n } from "@/services/i18n";
 
 const TAB_CONTENT: Record<string, string> = {
   layersTab: "layersContent",
@@ -22,15 +24,59 @@ export function showOptions(event?: Event): void {
     ensureEl("optionsTrigger").classList.remove("glow");
   }
 
-  ensureEl("regenerate").style.display = "none";
-  ensureEl("options").style.display = "block";
-  ensureEl("optionsTrigger").style.display = "none";
+  const optionsEl = ensureEl("options");
+  const triggerEl = ensureEl("optionsTrigger");
+  const regenEl = ensureEl("regenerate");
+
+  regenEl.style.display = "none";
+  optionsEl.style.display = "block";
+
+  // Modern animation
+  optionsEl.style.opacity = "0";
+  optionsEl.style.transform = "translateX(20px) scale(0.98)";
+  requestAnimationFrame(() => {
+    optionsEl.style.transition = "all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)";
+    optionsEl.style.opacity = "1";
+    optionsEl.style.transform = "translateX(0) scale(1)";
+  });
+
+  triggerEl.style.display = "none";
+
+  // Update tooltip based on language
+  try {
+    const dict = i18n.getDictionary();
+    triggerEl.dataset.tip = dict.menu.showMenu;
+  } catch {}
+
   event?.stopPropagation();
 }
 
 export function hideOptions(event?: Event): void {
-  ensureEl("options").style.display = "none";
-  ensureEl("optionsTrigger").style.display = "block";
+  const optionsEl = ensureEl("options");
+  const triggerEl = ensureEl("optionsTrigger");
+
+  // Modern hide animation
+  optionsEl.style.transition = "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)";
+  optionsEl.style.opacity = "0";
+  optionsEl.style.transform = "translateX(20px) scale(0.98)";
+
+  setTimeout(() => {
+    optionsEl.style.display = "none";
+    triggerEl.style.display = "block";
+    triggerEl.style.opacity = "0";
+    triggerEl.style.transform = "scale(0.9)";
+    requestAnimationFrame(() => {
+      triggerEl.style.transition = "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)";
+      triggerEl.style.opacity = "1";
+      triggerEl.style.transform = "scale(1)";
+    });
+  }, 200);
+
+  try {
+    const dict = i18n.getDictionary();
+    triggerEl.dataset.tip = dict.menu.showMenu;
+  } catch {}
+
   event?.stopPropagation();
 }
 
@@ -87,12 +133,35 @@ function initialize(): void {
   }
 
   const trigger = ensureEl("optionsTrigger");
+  const quickLang = document.getElementById("quickLangToggle") as HTMLElement | null;
+
   trigger.addEventListener("mouseenter", () => {
     if (trigger.classList.contains("glow")) return;
-    if (ensureEl("options").style.display === "none") ensureEl("regenerate").style.display = "block";
+    if (ensureEl("options").style.display === "none") {
+      ensureEl("regenerate").style.display = "block";
+      if (quickLang) {
+        quickLang.style.display = "block";
+        const langText = document.getElementById("quickLangText");
+        if (langText) {
+          try {
+            const currentLang = (window as any).i18n?.getLanguage() || "en";
+            langText.textContent = currentLang === "en" ? "RU" : "EN";
+          } catch {}
+        }
+      }
+    }
   });
   ensureEl("collapsible").addEventListener("mouseleave", () => {
     ensureEl("regenerate").style.display = "none";
+    if (quickLang) quickLang.style.display = "none";
+  });
+
+  // Update quick lang toggle on language change
+  window.addEventListener("language:changed", (e: any) => {
+    const langText = document.getElementById("quickLangText");
+    if (langText) {
+      langText.textContent = e.detail.language === "en" ? "RU" : "EN";
+    }
   });
 
   ensureEl("options")

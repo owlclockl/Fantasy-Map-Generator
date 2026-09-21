@@ -1,7 +1,9 @@
 // Layers tab: a projection of the Layers registry. Renders the layer buttons and wires them up.
+// Enhanced with i18n support (Russian) and modern UI
 import type { LayerId } from "@/components/layers";
 import { Layers } from "@/components/layers";
 import { ViewportLayers } from "@/renderers/viewport/viewport-renderer";
+import { i18n } from "@/services/i18n";
 import { isCtrlClick } from "@/utils";
 import { ensureEl, findEl } from "@/utils/nodeUtils";
 
@@ -68,10 +70,29 @@ export const LAYER_PRESETS: Record<string, string> = {
 export const getLayerByShortcut = (code: string): LayerId | undefined =>
   [...LAYER_TOGGLES].find(([, button]) => button.shortcut === code)?.[0];
 
-const TEMPLATE = /* html */ `
-  <p data-tip="Select a map layers preset" style="display: inline-block">Layers preset:</p>
+function getLocalizedPresets() {
+  try {
+    const dict = i18n.getDictionary();
+    return dict.layers.presets;
+  } catch {
+    return LAYER_PRESETS;
+  }
+}
+
+function buildTemplate(): string {
+  const presets = getLocalizedPresets();
+  const dict = (() => {
+    try {
+      return i18n.getDictionary().layers;
+    } catch {
+      return null;
+    }
+  })();
+
+  return /* html */ `
+  <p data-tip="Select a map layers preset" data-i18n="layers.preset" style="display: inline-block">${dict?.preset || "Layers preset:"}</p>
   <select data-tip="Select a map layers preset" id="layersPreset" style="width: 45%">
-    ${Object.entries(LAYER_PRESETS)
+    ${Object.entries(presets)
       .map(([id, label]) => `<option value="${id}">${label}</option>`)
       .join("")}
     <option hidden value="custom">Custom (not saved)</option>
@@ -88,28 +109,61 @@ const TEMPLATE = /* html */ `
     class="icon-minus sideButton"
     style="display: none"
   ></button>
-  <p>Displayed layers and layer order:</p>
+  <p data-i18n="layers.displayed">${dict?.displayed || "Displayed layers and layer order:"}</p>
   <ul
     data-tip="Click to toggle a layer, drag to raise or lower a layer. Ctrl + click to edit layer style"
     id="mapLayers"
   >
   </ul>
-  <div class="tip">Click to toggle, drag to raise or lower the layer</div>
-  <div class="tip">Ctrl + click to edit layer style</div>
+  <div class="tip" data-i18n="layers.tip1">${dict?.tip1 || "Click to toggle, drag to raise or lower the layer"}</div>
+  <div class="tip" data-i18n="layers.tip2">${dict?.tip2 || "Ctrl + click to edit layer style"}</div>
   <div id="viewMode" data-tip="Set view mode">
-    <p>View mode:</p>
+    <p data-i18n="layers.viewMode">${dict?.viewMode || "View mode:"}</p>
     <button data-tip="Standard view mode for editing the map" id="viewStandard" class="pressed">
-      Standard
+      ${dict?.standard || "Standard"}
     </button>
     <button
       data-tip="Map presentation in 3D scene. Works best for heightmap. Cannot be used for editing"
       id="viewMesh"
     >
-      3D scene
+      ${dict?.scene3d || "3D scene"}
     </button>
-    <button data-tip="Project map on globe. Cannot be used for editing" id="viewGlobe">Globe</button>
+    <button data-tip="Project map on globe. Cannot be used for editing" id="viewGlobe">${dict?.globe || "Globe"}</button>
   </div>
 `;
+}
+
+const TEMPLATE = buildTemplate();
+
+// Rebuild template on language change
+if (typeof window !== "undefined") {
+  window.addEventListener("language:changed", () => {
+    const container = document.getElementById("layersContent");
+    if (container) {
+      const activeTab = document.getElementById("layersTab")?.classList.contains("active");
+      const currentDisplay = container.style.display;
+      container.innerHTML = buildTemplate();
+      container.style.display = currentDisplay;
+      if (activeTab) {
+        // Re-bind sortable after rebuild
+        setTimeout(() => {
+          $("#mapLayers").sortable({
+            items: "li:not(.solid)",
+            containment: "parent",
+            cancel: ".solid",
+            update: (_event: Event, ui: { item: any }) => {
+              const id = ui.item.data("layer");
+              const before = ui.item.next().data("layer");
+              const thisLayer = Layers.has(id) ? id : undefined;
+              const beforeLayer = Layers.has(before) ? before : undefined;
+              if (thisLayer) Layers.move(thisLayer, beforeLayer);
+            }
+          });
+        }, 100);
+      }
+    }
+  });
+}
 
 ensureEl("layersContent").innerHTML = TEMPLATE;
 

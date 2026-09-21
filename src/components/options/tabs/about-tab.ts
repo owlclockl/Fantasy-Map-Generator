@@ -1,57 +1,120 @@
 // About tab: credits, links and the supporters list
+// Enhanced with modern UI and i18n (Russian)
 import { alertDialog } from "@/components/dialog/dialog-helpers";
+import { i18n } from "@/services/i18n";
 import { ensureEl } from "@/utils/nodeUtils";
 
-const TEMPLATE = /* html */ `
-  <div class="aboutActions">
+function buildAboutTemplate(): string {
+  const lang = i18n.getLanguage();
+  const isRu = lang === "ru";
+
+  const intro = isRu
+    ? `
+  <div class="aboutActions" style="display:flex; gap:8px; margin-bottom:16px">
+    <button
+      id="startTourButton"
+      onclick="window.Services.UiTour.start()"
+      data-tip="Пройдите интерактивный тур по генератору"
+      style="flex:1; background:linear-gradient(135deg, #6366f1, #8b5cf6); color:white; border:none; border-radius:10px; padding:10px; font-weight:600"
+    >
+      🎯 Интерактивный тур
+    </button>
+    <button
+      id="getAppButton"
+      onclick="window.Services.AppOffer.open()"
+      data-tip="Установите генератор на компьютер"
+      style="flex:1; background:white; border:1.5px solid #e5e7eb; border-radius:10px; padding:10px; font-weight:600"
+    >
+      💻 Десктоп приложение
+    </button>
+  </div>
+  <div style="background:linear-gradient(135deg, #f3f4f6, #e5e7eb); border-radius:12px; padding:16px; margin-bottom:16px">
+    <h3 style="margin:0 0 8px 0; font-family:var(--font-display, sans-serif); font-weight:700; color:#111827">🗺️ Генератор фэнтези-карт</h3>
+    <p style="margin:0; font-size:0.9em; line-height:1.5; color:#374151">
+      <a href="https://github.com/Azgaar/Fantasy-Map-Generator" target="_blank" style="color:#6366f1; font-weight:600">Fantasy Map Generator</a> — это
+      <a href="https://github.com/Azgaar/Fantasy-Map-Generator/blob/master/LICENSE" target="_blank" style="color:#6366f1">open source</a>
+      инструмент от Azgaar и команды. Вы можете использовать карты как есть, редактировать их или даже создавать новые с нуля.
+    </p>
+  </div>
+  `
+    : `
+  <div class="aboutActions" style="display:flex; gap:8px; margin-bottom:16px">
     <button
       id="startTourButton"
       onclick="window.Services.UiTour.start()"
       data-tip="Take an interactive tour of the map generator"
-      style="flex: 1; border: 1px solid var(--header);"
+      style="flex:1; background:linear-gradient(135deg, #6366f1, #8b5cf6); color:white; border:none; border-radius:10px; padding:10px; font-weight:600"
     >
-      Interactive Tour
+      🎯 Interactive Tour
     </button>
     <button
       id="getAppButton"
       onclick="window.Services.AppOffer.open()"
       data-tip="Install the Generator on your computer"
-      style="flex: 1; border: 1px solid var(--header);"
+      style="flex:1; background:white; border:1.5px solid #e5e7eb; border-radius:10px; padding:10px; font-weight:600"
     >
-      Desktop App
+      💻 Desktop App
     </button>
   </div>
-  <p>
-    <a href="https://github.com/Azgaar/Fantasy-Map-Generator" target="_blank">Fantasy Map Generator</a> is an
-    <a href="https://github.com/Azgaar/Fantasy-Map-Generator/blob/master/LICENSE" target="_blank"
-      >open source</a
-    >
-    tool by Azgaar and Team. You may use maps as they are, edit them or even create a new map from
-    scratch. Check out the
-    <a href="https://github.com/Azgaar/Fantasy-Map-Generator/wiki/Quick-Start-Tutorial" target="_blank"
-      >Quick start</a
-    >, <a href="https://github.com/Azgaar/Fantasy-Map-Generator/wiki/Q&A" target="_blank">Q&A</a>,
-    <a href="https://youtube.com/playlist?list=PLtgiuDC8iVR2gIG8zMTRn7T_L0arl9h1C" target="_blank"
-      >Video tutorial</a
-    >, and
-    <a href="https://github.com/Azgaar/Fantasy-Map-Generator/wiki/Hotkeys" target="_blank">hotkeys</a> for
-    guidance.
+  <div style="background:linear-gradient(135deg, #f3f4f6, #e5e7eb); border-radius:12px; padding:16px; margin-bottom:16px">
+    <h3 style="margin:0 0 8px 0; font-family:var(--font-display, sans-serif); font-weight:700; color:#111827">🗺️ Fantasy Map Generator</h3>
+    <p style="margin:0; font-size:0.9em; line-height:1.5; color:#374151">
+      <a href="https://github.com/Azgaar/Fantasy-Map-Generator" target="_blank" style="color:#6366f1; font-weight:600">Fantasy Map Generator</a> is an
+      <a href="https://github.com/Azgaar/Fantasy-Map-Generator/blob/master/LICENSE" target="_blank" style="color:#6366f1">open source</a>
+      tool by Azgaar and Team. You may use maps as they are, edit them or even create a new map from scratch.
+    </p>
+  </div>
+  `;
+
+  const improvements = `
+  <div style="background:linear-gradient(135deg, #667eea, #764ba2); border-radius:12px; padding:12px; margin:16px 0; text-align:center">
+    <div style="color:white; font-weight:600; margin-bottom:8px">${isRu ? "⚡ Улучшения в этой версии:" : "⚡ Enhancements in this version:"}</div>
+    <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap; font-size:0.8em">
+      <span style="background:rgba(255,255,255,0.2); padding:4px 8px; border-radius:20px; color:white">🎨 Modern UI</span>
+      <span style="background:rgba(255,255,255,0.2); padding:4px 8px; border-radius:20px; color:white">🇷🇺 ${isRu ? "Русский язык" : "Russian Language"}</span>
+      <span style="background:rgba(255,255,255,0.2); padding:4px 8px; border-radius:20px; color:white">⚡ ${isRu ? "Многопоточность" : "Multithreading"}</span>
+    </div>
+  </div>
+  `;
+
+  const links = isRu
+    ? `
+  <p style="font-size:0.9em; line-height:1.5">
+    Присоединяйтесь к нашему <a href="https://discordapp.com/invite/X7E84HU" target="_blank" style="color:#6366f1; font-weight:600">Discord серверу</a> и
+    <a href="https://www.reddit.com/r/FantasyMapGenerator/" target="_blank" style="color:#6366f1; font-weight:600">сообществу Reddit</a>, чтобы задавать вопросы, получать помощь и делиться картами.
+    Созданные карты можно использовать бесплатно, даже в коммерческих целях.
   </p>
-  <p>
-    Join our <a href="https://discordapp.com/invite/X7E84HU" target="_blank">Discord server</a> and
-    <a href="https://www.reddit.com/r/FantasyMapGenerator/" target="_blank">Reddit community</a> to ask
+  <p style="font-size:0.9em; line-height:1.5">
+    Проект активно развивается. Создатель и главный разработчик: Azgaar. Чтобы отслеживать прогресс, смотрите
+    <a href="https://trello.com/b/7x832DG4/fantasy-map-generator" target="_blank" style="color:#6366f1">доску разработки</a>. Для старых версий смотрите
+    <a href="https://github.com/Azgaar/Fantasy-Map-Generator/wiki/Changelog" target="_blank" style="color:#6366f1">список изменений</a>.
+    Сообщайте о багах <a href="https://github.com/Azgaar/Fantasy-Map-Generator/issues" target="_blank" style="color:#6366f1">здесь</a>.
+    Вы также можете связаться напрямую по <a href="mailto:azgaar.fmg@yandex.by" target="_blank" style="color:#6366f1">email</a>.
+  </p>
+  `
+    : `
+  <p style="font-size:0.9em; line-height:1.5">
+    Join our <a href="https://discordapp.com/invite/X7E84HU" target="_blank" style="color:#6366f1; font-weight:600">Discord server</a> and
+    <a href="https://www.reddit.com/r/FantasyMapGenerator/" target="_blank" style="color:#6366f1; font-weight:600">Reddit community</a> to ask
     questions, get help and share maps. The created maps can be used for free, even for commercial purposes.
   </p>
-  <p>
+  <p style="font-size:0.9em; line-height:1.5">
     The project is under active development. Creator and main maintainer: Azgaar. To track the development
     progress see the
-    <a href="https://trello.com/b/7x832DG4/fantasy-map-generator" target="_blank">devboard</a>. For older
+    <a href="https://trello.com/b/7x832DG4/fantasy-map-generator" target="_blank" style="color:#6366f1">devboard</a>. For older
     versions see the
-    <a href="https://github.com/Azgaar/Fantasy-Map-Generator/wiki/Changelog" target="_blank">changelog</a>.
+    <a href="https://github.com/Azgaar/Fantasy-Map-Generator/wiki/Changelog" target="_blank" style="color:#6366f1">changelog</a>.
     Please report bugs
-    <a href="https://github.com/Azgaar/Fantasy-Map-Generator/issues" target="_blank">here</a>. You can also
-    contact me directly via <a href="mailto:azgaar.fmg@yandex.by" target="_blank">email</a>.
+    <a href="https://github.com/Azgaar/Fantasy-Map-Generator/issues" target="_blank" style="color:#6366f1">here</a>. You can also
+    contact me directly via <a href="mailto:azgaar.fmg@yandex.by" target="_blank" style="color:#6366f1">email</a>.
   </p>
+  `;
+
+  return intro + links + improvements;
+}
+
+function getStaticAboutContent(): string {
+  return /* html */ `
   <div
     style="
       background-color: #e85b46;
@@ -59,6 +122,7 @@ const TEMPLATE = /* html */ `
       width: max-content;
       margin: 0.6em auto 0 auto;
       border: 1px solid #943838;
+      border-radius:10px;
     "
   >
     <a
@@ -77,9 +141,9 @@ const TEMPLATE = /* html */ `
       </div>
     </a>
   </div>
-  <p>
+  <p style="font-size:0.9em">
     Special thanks to
-    <a data-tip="Click to see list of supporters" onclick="showSupporters()">all supporters</a> on Patreon!
+    <a data-tip="Click to see list of supporters" onclick="showSupporters()" style="color:#6366f1; font-weight:600">all supporters</a> on Patreon!
   </p>
   <div style="display: flex; justify-content: center; padding: 0.4em; font-family: cursive">
     <a href="https://u24.gov.ua/" style="width: 80%" data-tip="Support Ukraine" target="_blank">
@@ -93,11 +157,11 @@ const TEMPLATE = /* html */ `
   </div>
   <div style="text-align: left">
     <p>Check out our other projects:</p>
-    <div>• <a href="https://azgaar.github.io/Armoria" target="_blank">Armoria</a>: a tool for creating coats of arms</div>
-    <div>• <a href="https://deorum.vercel.app" target="_blank">Deorum</a>: gallery of fantasy characters</div>
+    <div>• <a href="https://azgaar.github.io/Armoria" target="_blank" style="color:#6366f1">Armoria</a>: a tool for creating coats of arms</div>
+    <div>• <a href="https://deorum.vercel.app" target="_blank" style="color:#6366f1">Deorum</a>: gallery of fantasy characters</div>
   </div>
   <div style="text-align: left; margin-top: 0.5em">
-    Chinese localization: <a href="https://www.8desk.top" target="_blank">8desk.top</a>
+    Chinese localization: <a href="https://www.8desk.top" target="_blank" style="color:#6366f1">8desk.top</a>
   </div>
   <ul class="share-buttons">
     <li>
@@ -139,8 +203,22 @@ const TEMPLATE = /* html */ `
     </li>
   </ul>
 `;
+}
+
+const TEMPLATE = buildAboutTemplate() + getStaticAboutContent();
 
 ensureEl("aboutContent").innerHTML = TEMPLATE;
+
+if (typeof window !== "undefined") {
+  window.addEventListener("language:changed", () => {
+    const container = document.getElementById("aboutContent");
+    if (container) {
+      const scrollPos = container.scrollTop;
+      container.innerHTML = buildAboutTemplate() + getStaticAboutContent();
+      container.scrollTop = scrollPos;
+    }
+  });
+}
 
 /** The list of Patreon supporters, updated by hand with each release */
 function showSupporters(): void {

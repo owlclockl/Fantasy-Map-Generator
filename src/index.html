@@ -158,6 +158,15 @@
         this.rel = 'stylesheet';
       "
     />
+    <link
+      rel="preload"
+      href="modern-ui.css?v=ccfa2c0d"
+      as="style"
+      onload="
+        this.onload = null;
+        this.rel = 'stylesheet';
+      "
+    />
   </head>
   <body>
     <svg
@@ -349,28 +358,49 @@
         <div id="title">Fantasy Map Generator</div>
         <div id="versionText">‎ ‎</div>
         <p id="loading-text">LOADING<span>.</span><span>.</span><span>.</span></p>
+        <div id="generationProgress" style="display:none; margin-top:1.5em; width:100%">
+          <div style="background:rgba(255,255,255,0.2); border-radius:10px; height:6px; overflow:hidden; margin:10px 0">
+            <div id="generationProgressBar" style="height:100%; width:0%; background:linear-gradient(90deg, #fff, #a5b4fc); border-radius:10px; transition:width 0.3s ease"></div>
+          </div>
+          <div id="generationProgressText" style="font-family:monospace; font-size:0.9em; opacity:0.8"></div>
+          <div style="margin-top:8px; font-size:0.8em; opacity:0.7; display:flex; gap:8px; justify-content:center">
+            <span>⚡ Multithreading</span>
+            <span>🇷🇺 RU / 🇬🇧 EN</span>
+            <span>🎨 Modern UI</span>
+          </div>
+        </div>
       </div>
     </div>
     <div id="optionsContainer" style="opacity: 0">
       <div id="collapsible">
         <button
           id="optionsTrigger"
-          data-tip="Click to show the Menu"
+          data-tip="Click to show the Menu / Показать меню"
           data-shortcut="Tab"
           class="options glow"
           onclick="showOptions(event)"
+          aria-label="Open Menu"
         >
-          ►
+          <span class="menu-icon">☰</span>
+          <span class="menu-text" data-i18n="menu.showMenu">Menu</span>
         </button>
         <button
           id="regenerate"
-          data-tip="Click to generate a new map"
+          data-tip="Click to generate a new map / Новая карта"
           data-shortcut="F2"
           onclick="regeneratePrompt()"
           class="options"
           style="display: none"
         >
-          New Map!
+          <span>✨</span> <span data-i18n="menu.newMap">New Map</span>
+        </button>
+        <button
+          id="quickLangToggle"
+          data-tip="Switch language / Переключить язык"
+          style="display: none; background:rgba(255,255,255,0.9); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,0.3); border-radius:20px; padding:6px 10px; font-size:0.85em; font-weight:600; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.1)"
+          onclick="window.i18n && window.i18n.setLanguage(window.i18n.getLanguage() === 'en' ? 'ru' : 'en')"
+        >
+          🌐 <span id="quickLangText">RU</span>
         </button>
       </div>
       <div id="options" style="display: none">
@@ -378,18 +408,29 @@
         <div class="tab">
           <button
             id="optionsHide"
-            data-tip="Click to hide the Menu"
+            data-tip="Click to hide the Menu / Скрыть меню"
             data-shortcut="Tab or Esc"
             class="options"
             onclick="hideOptions(event)"
+            aria-label="Hide Menu"
           >
             ◄
           </button>
-          <button id="layersTab" data-tip="Click to change map layers" class="options active">Layers</button>
-          <button id="styleTab" data-tip="Click to open style editor" class="options">Style</button>
-          <button id="optionsTab" data-tip="Click to change generation and UI options" class="options">Options</button>
-          <button id="toolsTab" data-tip="Click to open tools menu" class="options">Tools</button>
-          <button id="aboutTab" data-tip="Click to see Generator info" class="options">About</button>
+          <button id="layersTab" data-tip="Map layers / Слои карты" class="options active" data-i18n="tabs.layers">
+            <span>🗂️</span> Layers
+          </button>
+          <button id="styleTab" data-tip="Style editor / Редактор стиля" class="options" data-i18n="tabs.style">
+            <span>🎨</span> Style
+          </button>
+          <button id="optionsTab" data-tip="Generation and UI options / Настройки" class="options" data-i18n="tabs.options">
+            <span>⚙️</span> Options
+          </button>
+          <button id="toolsTab" data-tip="Tools menu / Инструменты" class="options" data-i18n="tabs.tools">
+            <span>🛠️</span> Tools
+          </button>
+          <button id="aboutTab" data-tip="Generator info / О программе" class="options" data-i18n="tabs.about">
+            <span>ℹ️</span> About
+          </button>
         </div>
         <div id="layersContent" class="tabcontent" style="display: block"></div>
         <div id="styleContent" class="tabcontent"></div>
@@ -397,13 +438,13 @@
         <div id="toolsContent" class="tabcontent"></div>
         <div id="customizationMenu" class="tabcontent"></div>
         <div id="aboutContent" class="tabcontent"></div>
-        <div id="sticked">
-          <button id="newMapButton" data-tip="Generate a new map based on options" data-shortcut="F2">New Map</button>
-          <button id="exportButton" data-tip="Select format to download image or export map data">Export</button>
-          <button id="saveButton" data-tip="Save fully-functional map file">Save</button>
-          <button id="loadButton" data-tip="Load fully-functional map (.map or .gz formats)">Load</button>
-          <button id="zoomReset" data-tip="Reset map zoom" data-shortcut="0 (zero)">Zoom out</button>
-          <button id="searchButton" data-tip="Search map and commands" data-shortcut="Space">Search</button>
+                <div id="sticked">
+          <button id="newMapButton" data-tip="Generate new map / Новая карта" data-shortcut="F2" data-i18n="menu.newMap">✨ New Map</button>
+          <button id="exportButton" data-tip="Export map / Экспорт" data-i18n="menu.export">📤 Export</button>
+          <button id="saveButton" data-tip="Save map / Сохранить" data-i18n="menu.save">💾 Save</button>
+          <button id="loadButton" data-tip="Load map / Загрузить" data-i18n="menu.load">📂 Load</button>
+          <button id="zoomReset" data-tip="Reset zoom / Сбросить масштаб" data-shortcut="0 (zero)" data-i18n="menu.zoomOut">🔍 Zoom out</button>
+          <button id="searchButton" data-tip="Search / Поиск" data-shortcut="Space" data-i18n="menu.search">🔎 Search</button>
         </div>
       </div>
     </div>
