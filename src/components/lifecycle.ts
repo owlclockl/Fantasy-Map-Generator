@@ -60,7 +60,40 @@ export async function generate(config?: GenerationConfig): Promise<void> {
     if (precreatedGraph && points !== undefined) options.map.graph.points = points;
     applyGraphSize(); // TODO: DOM change, not part of generation
 
-    await GenerationPipeline.run({ graph: precreatedGraph });
+    // Check threading preference
+    const useWorkers = options.app.ui.threading?.enabled !== false;
+    const workerCount = options.app.ui.threading?.workers || 4;
+
+    if (useWorkers) {
+      INFO && console.log(`Generation using ${workerCount} worker threads`);
+    }
+
+    await GenerationPipeline.run(
+      { graph: precreatedGraph },
+      {
+        useWorkers,
+        onProgress: (stepId, completed, total) => {
+          const percentage = Math.round((completed / total) * 100);
+          const loadingText = document.getElementById("loading-text");
+          if (loadingText) {
+            loadingText.textContent = `${i18n?.t("loading.generating") || "Generating"}: ${stepId} (${percentage}%)`;
+          }
+          // Dispatch progress event for UI
+          window.dispatchEvent(
+            new CustomEvent("generation:progress", {
+              detail: { stepId, completed, total, percentage }
+            })
+          );
+        },
+        onStepStart: stepId => {
+          TIME && console.time(`step:${stepId}`);
+        },
+        onStepComplete: (stepId, duration) => {
+          TIME && console.timeEnd(`step:${stepId}`);
+          DEBUG.generation && console.debug(`Step ${stepId} completed in ${duration.toFixed(2)}ms`);
+        }
+      }
+    );
     Options.persist();
 
     syncOptionInputs();

@@ -22,9 +22,11 @@ import { CULTURE_SETS, Cultures } from "@/generators/cultures-generator";
 import { Emblems } from "@/generators/emblems-generator";
 import { EmblemRenderer } from "@/renderers/emblems/renderer";
 import { toggleAssistant } from "@/services/assistant";
+import { i18n } from "@/services/i18n";
 import { copyMapURL } from "@/services/url-params";
-import { applyOption, ensureEl, findEl } from "@/utils/nodeUtils";
+import { applyOption, ensureEl } from "@/utils/nodeUtils";
 import { minmax, rn } from "@/utils/numberUtils";
+import { getGenerationWorkerPool } from "@/utils/worker-pool";
 import { PerformanceSettings } from "../performance-settings";
 
 interface OptionBinding {
@@ -173,7 +175,36 @@ const OPTION_BINDINGS: Record<string, OptionBinding> = {
   zoomExtentMax: { read: o => o.app.zoomExtent.max, update: changeZoomExtent, event: "change" },
   themeHue: { read: o => hsl(o.app.ui.themeColor).h, update: changeThemeHue },
   themeColor: { read: o => o.app.ui.themeColor, update: value => setTheme(value, options.app.ui.transparency) },
-  transparency: { read: o => o.app.ui.transparency, update: value => setTheme(options.app.ui.themeColor, +value) }
+  transparency: { read: o => o.app.ui.transparency, update: value => setTheme(options.app.ui.themeColor, +value) },
+  language: option({
+    read: o => o.app.ui.language,
+    write: (o, value) => (o.app.ui.language = value as any),
+    parse: String,
+    effect: value => i18n.setLanguage(value as any)
+  }),
+  threadingEnabled: option({
+    read: o => (o.app.ui.threading.enabled ? "enabled" : "disabled"),
+    write: (o, value) => (o.app.ui.threading.enabled = value === "enabled"),
+    parse: String,
+    effect: () => {
+      // Update worker pool status - handled by pipeline check
+    }
+  }),
+  threadingWorkers: option({
+    read: o => o.app.ui.threading.workers,
+    write: (o, value) => {
+      o.app.ui.threading.workers = value;
+      try {
+        getGenerationWorkerPool().setMaxWorkers(value);
+      } catch {}
+    },
+    parse: Number
+  }),
+  threadingMode: option({
+    read: o => o.app.ui.threading.mode,
+    write: (o, value) => (o.app.ui.threading.mode = value as any),
+    parse: String
+  })
 };
 
 function option<T extends string | number>(definition: OptionDefinition<T>): OptionBinding {
@@ -190,9 +221,21 @@ function option<T extends string | number>(definition: OptionDefinition<T>): Opt
   };
 }
 
-const TEMPLATE = /* html */ `
-  <p data-tip="Settings for the next map. Generate a new map to apply them">
-    Map settings (apply to new maps):
+function getOptionsTemplate(): string {
+  const isRu = i18n.getLanguage() === "ru";
+  const t = (en: string, ru: string) => (isRu ? ru : en);
+  const dict = (() => {
+    try {
+      return i18n.getDictionary().options;
+    } catch {
+      return null;
+    }
+  })();
+
+  return /* html */ `
+  <p data-tip="${t("Settings for the next map. Generate a new map to apply them", "Настройки для следующей карты. Создайте новую карту для применения")}" 
+     style="font-weight:700; background:linear-gradient(135deg, #f3f4f6, #e5e7eb); padding:10px 12px; border-radius:8px; margin:0 0 10px 0; display:flex; align-items:center; gap:6px">
+    <span>🗺️</span> ${dict?.mapSettings || t("Map settings (apply to new maps):", "Настройки карты (для новых карт):")}
   </p>
   <table>
     <tr
@@ -363,8 +406,9 @@ const TEMPLATE = /* html */ `
       </td>
     </tr>
   </table>
-  <p data-tip="Interface preferences saved in this browser. Changes apply immediately">
-    Interface settings:
+  <p data-tip="${t("Interface preferences saved in this browser. Changes apply immediately", "Настройки интерфейса сохраняются в браузере и применяются сразу")}"
+     style="font-weight:700; background:linear-gradient(135deg, #f3f4f6, #e5e7eb); padding:10px 12px; border-radius:8px; margin:16px 0 10px 0; display:flex; align-items:center; gap:6px">
+    <span>🎨</span> ${dict?.interfaceSettings || t("Interface settings:", "Настройки интерфейса:")}
   </p>
   <table>
     <tr
@@ -601,16 +645,54 @@ const TEMPLATE = /* html */ `
         ></i>
       </td>
     </tr>
-    <tr
-      data-tip="Load Google Translate and select a language. Automatic translation can break some page functions. If this happens, reset the language to English or refresh the page"
-    >
+    <tr data-tip="Select interface language / Выберите язык интерфейса">
       <td>
         <i data-tip="Reset language to English" id="resetLanguage" class="icon-ccw"></i>
       </td>
-      <td>Language</td>
+      <td data-i18n="options.language">Language</td>
       <td>
-        <button id="loadGoogleTranslateButton">Load Google Translate</button>
-        <div id="google_translate_element"></div>
+        <div id="languageSelector">
+          <button id="langEn" data-lang="en" class="active">🇬🇧 EN</button>
+          <button id="langRu" data-lang="ru">🇷🇺 RU</button>
+        </div>
+        <select id="languageSelect" data-option="language" style="display:none">
+          <option value="en">English</option>
+          <option value="ru">Русский</option>
+        </select>
+      </td>
+      <td></td>
+    </tr>
+    <tr data-tip="Multithreading: use Web Workers for heavy calculations / Многопоточность">
+      <td></td>
+      <td data-i18n="performance.threading">Multithreading</td>
+      <td>
+        <select id="threadingEnabled" data-option="threadingEnabled">
+          <option value="enabled" selected>Enabled / Вкл</option>
+          <option value="disabled">Disabled / Выкл</option>
+        </select>
+      </td>
+      <td>
+        <span id="threadingStatus" data-tip="Threading status" style="font-size:0.8em">⚡</span>
+      </td>
+    </tr>
+    <tr data-tip="Number of worker threads / Количество потоков">
+      <td></td>
+      <td data-i18n="performance.workers">Worker threads</td>
+      <td>
+        <slider-input id="threadingWorkers" data-option="threadingWorkers" min="1" max="8" value="4"></slider-input>
+      </td>
+      <td>
+        <output data-option-output="threadingWorkers">4</output>
+      </td>
+    </tr>
+    <tr data-tip="Threading mode / Режим многопоточности">
+      <td></td>
+      <td>Threading mode</td>
+      <td>
+        <select id="threadingMode" data-option="threadingMode">
+          <option value="auto" selected>Auto / Авто</option>
+          <option value="manual">Manual / Вручную</option>
+        </select>
       </td>
       <td></td>
     </tr>
@@ -639,6 +721,31 @@ const TEMPLATE = /* html */ `
     </button>
   </div>
 `;
+}
+
+const TEMPLATE = getOptionsTemplate();
+
+if (typeof window !== "undefined") {
+  window.addEventListener("language:changed", () => {
+    const container = document.getElementById("optionsContent") as HTMLElement | null;
+    if (container) {
+      const scrollPos = container.scrollTop;
+      const wasVisible = container.style.display !== "none";
+      container.innerHTML = getOptionsTemplate();
+      container.scrollTop = scrollPos;
+      if (!wasVisible) container.style.display = "none";
+      // Re-bind pins after rebuild
+      try {
+        window.dispatchEvent(new CustomEvent("options:rebuilt"));
+        if ((globalThis as any).Pins) {
+          (globalThis as any).Pins.bindIcons(container, currentValue);
+        } else {
+          Pins.bindIcons(container, currentValue);
+        }
+      } catch {}
+    }
+  });
+}
 
 const pendingInputs = new WeakMap<HTMLElement, string>();
 
@@ -666,8 +773,15 @@ function addListeners(): void {
     else if (target.id === "openPerformanceSettings") PerformanceSettings.open();
     else if (target.id === "speakerTest") testSpeaker();
     else if (target.id === "themeColorRestore") restoreDefaultThemeColor();
-    else if (target.id === "loadGoogleTranslateButton") loadGoogleTranslate();
     else if (target.id === "resetLanguage") resetLanguage();
+    else if (target.dataset.lang) {
+      const lang = target.dataset.lang as "en" | "ru";
+      changeLanguage(lang);
+    } else if (target.closest("[data-lang]")) {
+      const btn = target.closest("[data-lang]") as HTMLElement;
+      const lang = btn.dataset.lang as "en" | "ru";
+      if (lang) changeLanguage(lang);
+    }
   });
 }
 
@@ -1012,31 +1126,77 @@ function testSpeaker(): void {
   speechSynthesis.speak(speech);
 }
 
-function loadGoogleTranslate(): void {
-  const script = document.createElement("script");
-  script.src = "https://translate.google.com/translate_a/element.js?cb=initGoogleTranslate";
-  script.onload = () => {
-    findEl("loadGoogleTranslateButton")?.remove();
+function changeLanguage(lang: "en" | "ru"): void {
+  i18n.setLanguage(lang);
+  Options.set(o => (o.app.ui.language = lang));
 
-    // replace the mapLayers hotkey underlines with bare text, they confuse the translator
-    for (const item of ensureEl("mapLayers").querySelectorAll("li")) {
-      item.innerHTML = item.innerHTML.replace(/<u>(.+)<\/u>/g, "$1");
+  // Update UI buttons
+  const selector = document.getElementById("languageSelector");
+  if (selector) {
+    for (const btn of selector.querySelectorAll("button")) {
+      btn.classList.toggle("active", (btn as HTMLElement).dataset.lang === lang);
     }
+  }
+
+  // Update document lang
+  document.documentElement.lang = lang;
+
+  // Re-render tabs with new translations
+  updateMenuTranslations();
+}
+
+function updateMenuTranslations(): void {
+  const dict = i18n.getDictionary();
+
+  // Update tab labels
+  const tabMappings: Record<string, string> = {
+    layersTab: dict.tabs.layers,
+    styleTab: dict.tabs.style,
+    optionsTab: dict.tabs.options,
+    toolsTab: dict.tabs.tools,
+    aboutTab: dict.tabs.about
   };
-  document.head.append(script);
+
+  for (const [id, label] of Object.entries(tabMappings)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = label;
+  }
+
+  // Update sticked buttons
+  const buttonMappings: Record<string, string> = {
+    newMapButton: dict.menu.newMap,
+    exportButton: dict.menu.export,
+    saveButton: dict.menu.save,
+    loadButton: dict.menu.load,
+    zoomReset: dict.menu.zoomOut,
+    searchButton: dict.menu.search
+  };
+
+  for (const [id, label] of Object.entries(buttonMappings)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = label;
+  }
+
+  // Update tooltips
+  const trigger = document.getElementById("optionsTrigger");
+  if (trigger) {
+    const isHidden = document.getElementById("options")?.style.display === "none";
+    trigger.dataset.tip = isHidden ? dict.menu.showMenu : dict.menu.hideMenu;
+  }
+
+  // Dispatch event for other components
+  window.dispatchEvent(new CustomEvent("ui:translated", { detail: { language: i18n.getLanguage() } }));
+}
+
+function loadGoogleTranslate(): void {
+  // Deprecated: replaced by native i18n system
+  console.info("Google Translate is deprecated, using native i18n");
+  // For backwards compatibility, just switch to English
+  changeLanguage("en");
 }
 
 function resetLanguage(): void {
-  const select = document.querySelector<HTMLSelectElement & { handleChange: (e: Event) => void }>(
-    "#google_translate_element select"
-  );
-  if (!select?.value) return;
-
-  // twice: the first change only arms the widget, the second actually resets it
-  for (let i = 0; i < 2; i++) {
-    select.value = "en";
-    select.handleChange(new Event("change"));
-  }
+  changeLanguage("en");
 }
 
 /**
@@ -1079,28 +1239,64 @@ export function restoreUi(): void {
   changeDialogsTheme(ui.themeColor, ui.transparency);
   applyPerformanceSettings();
   applyZoomExtent();
+
+  // Restore language - do before pin binding to avoid double rebuild issues
+  const lang = ui.language || "en";
+  try {
+    if (typeof document !== "undefined") document.documentElement.lang = lang;
+  } catch {}
+  const langSelector = document.getElementById("languageSelector");
+  if (langSelector) {
+    for (const btn of langSelector.querySelectorAll("button")) {
+      btn.classList.toggle("active", (btn as HTMLElement).dataset.lang === lang);
+    }
+  }
+
+  // Language change will trigger rebuild, so we need to set language after initial pin binding
+  // and then re-bind pins
+  const needsRebuild = (() => {
+    try {
+      return i18n.getLanguage() !== lang;
+    } catch {
+      return false;
+    }
+  })();
+
+  if (needsRebuild) {
+    i18n.setLanguage(lang);
+    // After language change, optionsContent is rebuilt, so re-bind pins
+    try {
+      Pins.bindIcons(ensureEl("options"), currentValue);
+    } catch {}
+  } else {
+    // Even if same language, ensure UI translations are up to date
+    try {
+      i18n.setLanguage(lang);
+    } catch {}
+  }
+
+  updateMenuTranslations();
+
+  // Restore threading settings
+  try {
+    if (typeof Worker !== "undefined") {
+      const pool = getGenerationWorkerPool();
+      pool.setMaxWorkers(ui.threading.workers);
+    }
+    const status = document.getElementById("threadingStatus");
+    if (status) {
+      status.textContent = ui.threading.enabled ? `⚡ ${ui.threading.workers} workers` : "⏸️ disabled";
+    }
+  } catch {}
 }
 
 // Legacy seam: the classic style.js reads the culture set cap, the submap and transform tools
-// set the cell density, and Google's script calls back into the page by name
+// set the cell density
 declare global {
   // biome-ignore lint/suspicious/noRedeclare: legacy seam
   var changeCellsDensity: (density: number) => void;
-  var initGoogleTranslate: () => void;
-  var google: {
-    translate: {
-      TranslateElement: {
-        new (config: { pageLanguage: string; layout: unknown }, elementId: string): unknown;
-        InlineLayout: { VERTICAL: unknown };
-      };
-    };
-  };
 }
 
 window.changeCellsDensity = changeCellsDensity;
-window.initGoogleTranslate = () => {
-  new google.translate.TranslateElement(
-    { pageLanguage: "en", layout: google.translate.TranslateElement.InlineLayout.VERTICAL },
-    "google_translate_element"
-  );
-};
+// Keep for legacy - reference to avoid unused
+void loadGoogleTranslate;

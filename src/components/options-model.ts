@@ -97,7 +97,16 @@ class OptionsModel {
           themeColor: DEFAULT_THEME_COLOR,
           transparency: 5,
           assistant: "show",
-          speakerVoice: ""
+          speakerVoice: "",
+          language: (typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("ru")
+            ? "ru"
+            : "en") as "en" | "ru",
+          threading: {
+            enabled: true,
+            workers:
+              typeof navigator !== "undefined" ? Math.min(Math.max(navigator.hardwareConcurrency || 4, 2), 8) : 4,
+            mode: "auto" as const
+          }
         },
         export: { pngResolution: 1, tiles: { cols: 8, rows: 8, scale: 1 } },
         trade: { animation: structuredClone(DEFAULT_TRADE_ANIMATION) },

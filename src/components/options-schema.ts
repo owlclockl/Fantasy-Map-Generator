@@ -198,7 +198,15 @@ export const optionsSchema = z.strictObject({
       themeColor: hexColor,
       transparency: percent,
       assistant: z.enum(["show", "hide"]),
-      speakerVoice: z.string() // the index into the browser's voice list, "" until one is picked
+      speakerVoice: z.string(), // the index into the browser's voice list, "" until one is picked
+      language: z.enum(["en", "ru"]).default("en"),
+      threading: z
+        .strictObject({
+          enabled: z.boolean(),
+          workers: count.min(1).max(16),
+          mode: z.enum(["auto", "manual"])
+        })
+        .default({ enabled: true, workers: 4, mode: "auto" })
     }),
     export: z.strictObject({
       pngResolution: positive,
