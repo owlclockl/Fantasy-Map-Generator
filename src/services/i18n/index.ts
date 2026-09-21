@@ -156,7 +156,6 @@ export const i18n = new I18nService();
 declare global {
   // biome-ignore lint/suspicious/noRedeclare: legacy seam
   var i18n: I18nService;
-  // biome-ignore lint/suspicious/noRedeclare: legacy seam
   var t: (key: string, fallback?: string) => string;
 }
 
