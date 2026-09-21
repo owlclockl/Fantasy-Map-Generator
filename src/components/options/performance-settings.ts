@@ -6,8 +6,8 @@ import {
   type PerformanceSettings as Settings,
   setPerformanceSetting
 } from "@/components/performance";
-import { ensureEl } from "@/utils/nodeUtils";
 import { i18n } from "@/services/i18n";
+import { ensureEl } from "@/utils/nodeUtils";
 import { getGenerationWorkerPool, getGlobalWorkerPool } from "@/utils/worker-pool";
 
 const DIALOG_ID = "performanceSettings";
@@ -181,7 +181,9 @@ function buildDialogHTML(): string {
   const rows = SETTINGS.map(({ key, label, tip, choices }) => {
     const value = String(current[key]);
     const optionsHtml = choices
-      .map(choice => `<option value="${choice.value}" ${choice.value === value ? "selected" : ""}>${choice.label}</option>`)
+      .map(
+        choice => `<option value="${choice.value}" ${choice.value === value ? "selected" : ""}>${choice.label}</option>`
+      )
       .join("");
     return /* html */ `
       <tr data-tip="${tip}">
@@ -244,9 +246,11 @@ function buildDialogHTML(): string {
         </table>
 
         <div style="margin-top:0.8em; padding:8px 10px; background:#f3f4f6; border-radius:8px; font-size:0.8em; color:#6b7280; border-left:3px solid #6366f1">
-          ${isRu
-            ? "💡 Многопоточность ускоряет генерацию карты, используя все ядра процессора. Если возникают проблемы, отключите её."
-            : "💡 Multithreading speeds up map generation by using all CPU cores. If you experience issues, disable it."}
+          ${
+            isRu
+              ? "💡 Многопоточность ускоряет генерацию карты, используя все ядра процессора. Если возникают проблемы, отключите её."
+              : "💡 Multithreading speeds up map generation by using all CPU cores. If you experience issues, disable it."
+          }
         </div>
       </div>
     </div>`;

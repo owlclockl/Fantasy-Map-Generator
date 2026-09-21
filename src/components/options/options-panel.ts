@@ -5,9 +5,9 @@ import { changeViewMode } from "@/components/options/view-mode";
 import { clearMainTip } from "@/components/tooltips";
 import { resetZoom } from "@/components/zoom";
 import { Controllers } from "@/controllers";
+import { i18n } from "@/services/i18n";
 import { ARROW_TIP_KEY } from "@/services/versioning";
 import { ensureEl, findEl } from "@/utils/nodeUtils";
-import { i18n } from "@/services/i18n";
 
 const TAB_CONTENT: Record<string, string> = {
   layersTab: "layersContent",

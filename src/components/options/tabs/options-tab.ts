@@ -2,8 +2,6 @@ import { hsl, select } from "d3";
 import { applyZoomExtent, fitMapToScreen, setViewport } from "@/components/canvas";
 import { DEFAULT_THEME_COLOR } from "@/components/options-model";
 import type { OptionsData } from "@/components/options-schema";
-import { i18n } from "@/services/i18n";
-import { getGenerationWorkerPool } from "@/utils/worker-pool";
 import {
   applyPerformancePreset,
   applyPerformanceSettings,
@@ -24,9 +22,11 @@ import { CULTURE_SETS, Cultures } from "@/generators/cultures-generator";
 import { Emblems } from "@/generators/emblems-generator";
 import { EmblemRenderer } from "@/renderers/emblems/renderer";
 import { toggleAssistant } from "@/services/assistant";
+import { i18n } from "@/services/i18n";
 import { copyMapURL } from "@/services/url-params";
 import { applyOption, ensureEl } from "@/utils/nodeUtils";
 import { minmax, rn } from "@/utils/numberUtils";
+import { getGenerationWorkerPool } from "@/utils/worker-pool";
 import { PerformanceSettings } from "../performance-settings";
 
 interface OptionBinding {
@@ -183,7 +183,7 @@ const OPTION_BINDINGS: Record<string, OptionBinding> = {
     effect: value => i18n.setLanguage(value as any)
   }),
   threadingEnabled: option({
-    read: o => o.app.ui.threading.enabled ? "enabled" : "disabled",
+    read: o => (o.app.ui.threading.enabled ? "enabled" : "disabled"),
     write: (o, value) => (o.app.ui.threading.enabled = value === "enabled"),
     parse: String,
     effect: () => {
@@ -225,7 +225,11 @@ function getOptionsTemplate(): string {
   const isRu = i18n.getLanguage() === "ru";
   const t = (en: string, ru: string) => (isRu ? ru : en);
   const dict = (() => {
-    try { return i18n.getDictionary().options; } catch { return null; }
+    try {
+      return i18n.getDictionary().options;
+    } catch {
+      return null;
+    }
   })();
 
   return /* html */ `

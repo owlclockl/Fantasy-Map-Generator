@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { WorkerPool, parallelMap } from "./worker-pool";
+import { describe, expect, it } from "vitest";
+import { parallelMap, WorkerPool } from "./worker-pool";
 
 describe("WorkerPool", () => {
   it("creates pool with default workers", () => {

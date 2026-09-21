@@ -103,7 +103,8 @@ class OptionsModel {
             : "en") as "en" | "ru",
           threading: {
             enabled: true,
-            workers: typeof navigator !== "undefined" ? Math.min(Math.max(navigator.hardwareConcurrency || 4, 2), 8) : 4,
+            workers:
+              typeof navigator !== "undefined" ? Math.min(Math.max(navigator.hardwareConcurrency || 4, 2), 8) : 4,
             mode: "auto" as const
           }
         },
